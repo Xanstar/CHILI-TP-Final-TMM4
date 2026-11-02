@@ -132,7 +132,6 @@ var _door_time := 0.0
 var _bait := 0.0
 var _bait_at := 2.0
 var _flash := 0.0
-var _p_pressed := false
 var _time := 0.0
 ## Pose de la cabeza con la que se calibró, en grados.
 var _head_offset := Vector2.ZERO
@@ -176,12 +175,6 @@ func _process(delta: float) -> void:
 	_update_hud()
 	_update_door_toggle(delta)
 	_update_movement(delta)
-	# Tecla P: imprimir posicion actual (con cooldown para no spamear).
-	if Input.is_key_pressed(KEY_P) and not _p_pressed:
-		_p_pressed = true
-		print("[POS] player:", camera.global_position, "door:", room.glb_door.global_position if room.glb_door else "null", "chili:", chili.global_position if chili.visible else "hidden")
-	if not Input.is_key_pressed(KEY_P):
-		_p_pressed = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
