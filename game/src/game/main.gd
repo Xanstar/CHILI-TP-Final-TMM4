@@ -236,7 +236,9 @@ func _update_door_toggle(delta: float) -> void:
 	_door_toggle_cooldown = maxf(_door_toggle_cooldown - delta, 0.0)
 	if _door_toggle_cooldown > 0.0:
 		return
-	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 25.0
+	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 30.0
+	if running:
+		pass
 	if not looking_at_door or not EyeInput.hand:
 		return
 	if EyeInput.gesture == "Closed_Fist" and not door_closed:
@@ -456,29 +458,12 @@ func _target_text() -> String:
 		return ""
 	if door_closed:
 		return "puerta cerrada"
-	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 25.0
+	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 30.0
 	if looking_at_door:
 		if door_closed:
 			return "puerta cerrada — puño para abrir"
 		else:
 			return "puerta abierta — puño para cerrar"
-	return ""
-	if finished or EyeInput.hand:
-		return ""
-	if not running:
-		if not EyeInput.tracking:
-			return "sin cámara — acercate al centro"
-		return "mirá al frente — arranca solo"
-	if not EyeInput.tracking:
-		return "sin cámara — el juego sigue con la última pose"
-	if EyeInput.eyes_closed_time > eyes_closed_delay:
-		return "ojos cerrados"
-	if _blackout_active:
-		return "APAGÓN"
-	if _creep > 0.7:
-		return "CHILI se acerca..."
-	if chili_at_door and not door_closed:
-		return "CHILI está en la puerta"
 	return ""
 
 

@@ -17,7 +17,7 @@ extends Camera3D
 ## Límite hacia arriba (positivo) y hacia abajo (negativo). La webcam suele
 ## estar arriba de la pantalla, así que se permite más arriba que abajo.
 @export var max_pitch_up := 35.0
-@export var max_pitch_down := 15.0
+@export var max_pitch_down := 45.0
 ## Desplaza el centro hacia arriba: compensa que la cámara esté arriba y la
 ## mirada natural caiga hacia abajo. Hace que mirar arriba sea más fácil.
 @export var pitch_bias := 12.0

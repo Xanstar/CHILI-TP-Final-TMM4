@@ -11,6 +11,7 @@ const CLUTTER_COUNT := 0
 const SEED := 7
 
 var _clear_zones: Array[Vector3] = []
+var glb_door: Node3D = null
 
 
 func build(clear_zones: Array[Vector3]) -> void:
@@ -18,6 +19,44 @@ func build(clear_zones: Array[Vector3]) -> void:
 	_build_environment()
 	_build_bathroom()
 	_build_clutter()
+	# Buscar la puerta del asset importado.
+	_find_glb_door()
+
+
+func _find_glb_door() -> void:
+	var all_doors: Array[Node3D] = []
+	_collect_doors(self, all_doors)
+	var best_door: Node3D = null
+	var best_dist := 9999.0
+	for d in all_doors:
+		var dist := d.global_position.distance_to(Vector3.ZERO)
+		if dist < best_dist:
+			best_dist = dist
+			best_door = d
+	if best_door != null:
+		glb_door = best_door
+	else:
+		print("GLB door NOT found")
+
+
+func _collect_doors(node: Node, result: Array[Node3D]) -> void:
+	var node_name := node.name
+	# Solo nodos "Door" o "Door_001", "Door_002", etc. (no hinges ni meshes).
+	if node_name == "Door" or (node_name.begins_with("Door_") and not "Hinges" in node_name and not "windows" in node_name):
+		if node is Node3D:
+			result.append(node as Node3D)
+	for c in node.get_children():
+		_collect_doors(c, result)
+
+
+func _find_node_by_name(node: Node, search: String) -> Node:
+	if node.name == search:
+		return node
+	for c in node.get_children():
+		var r := _find_node_by_name(c, search)
+		if r != null:
+			return r
+	return null
 
 
 ## Coloca un nodo vacío donde van los remedios (cerca del lavabo).
@@ -58,9 +97,10 @@ func _build_bathroom() -> void:
 		push_warning("Room: no pude cargar el baño")
 		return
 	var bathroom := scene.instantiate()
-	# Centrar el baño en el jugador para que esté adentro.
+	# Posicionar el baño para que la puerta quede frente al jugador.
+	# La puerta está en el origen del GLB; el baño se extiende en +X y +Z.
 	bathroom.scale = Vector3.ONE * 1.0
-	bathroom.position = Vector3(0, -0.5, 0)
+	bathroom.position = Vector3(0, -0.5, -2.0)
 	add_child(bathroom)
 	# Luces tenues para ambiente de terror.
 	Shapes.add_light(self, Vector3(0, 3.0, 0), Color(0.8, 0.75, 0.6), 1.5, 12.0)
