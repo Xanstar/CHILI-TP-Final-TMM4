@@ -21,9 +21,10 @@ func set_door_closed(closed: bool) -> void:
 		return
 	_door_closed = closed
 	if closed:
-		# Rotar la puerta 90 grados para "cerrarla".
-		glb_door.rotation_degrees.y = _door_original_rotation.y + 90.0
+		# Cerrada: alineada con la pared (rotación Y = 0).
+		glb_door.rotation_degrees.y = 0.0
 	else:
+		# Abierta: posición original del asset.
 		glb_door.rotation_degrees.y = _door_original_rotation.y
 
 
@@ -111,9 +112,8 @@ func _build_bathroom() -> void:
 		push_warning("Room: no pude cargar el baño")
 		return
 	var bathroom := scene.instantiate()
-	# Rotar 180 para que la puerta quede frente al jugador.
+	# El jugador está adentro del baño.
 	bathroom.scale = Vector3.ONE * 1.0
-	bathroom.rotation_degrees.y = 180.0
 	bathroom.position = Vector3(0, -0.5, 0)
 	add_child(bathroom)
 	# Luces tenues para ambiente de terror.
