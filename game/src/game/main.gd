@@ -149,9 +149,13 @@ func _ready() -> void:
 	EyeInput.grab.connect(_on_grab)
 	EyeInput.source_changed.connect(_on_source_changed)
 
-	# CHILI empieza fuera del baño.
-	chili.visible = false
-	_chili_next_appear = randf_range(chili_appear_min, chili_appear_max)
+	# CHILI empieza visible en la puerta por unos segundos.
+	chili.visible = true
+	chili_at_door = true
+	chili.position = room.glb_door.global_position + Vector3(0, 0, -1.5)
+	chili.rotation_degrees.y = 180.0
+	_chili_stay_timer = 0.0
+	_chili_next_appear = 0.0
 
 	# Arranque sin Enter: solo para pruebas headless y para grabar la demo.
 	if Cli.has_flag("--auto"):
@@ -314,6 +318,26 @@ func _update_rules(delta: float) -> void:
 		contagion += contagion_rate * 2.0 * delta
 		contagion = minf(contagion, 1.0)
 
+	# 2b. Medicar a CHILI: si llevás un objeto y lo mirás, lo curás.
+	if carried != null and (focus == Focus.CHILI or _time_without_chili < chili_memory) \
+			and EyeInput.hand and EyeInput.palm_ready and (_time - _grabbed_at) > 0.4:
+		contagion = maxf(contagion - 0.25, 0.0)
+		chili_at_door = false
+		chili.visible = false
+		_chili_next_appear = randf_range(chili_appear_min, chili_appear_max)
+		_notify("Medicaste a CHILI")
+		if carried != null:
+			carried.detach_to(self)
+			carried = null
+
+	# 2c. Cerrar los ojos hace que CHILI se vaya, pero acelera la infección.
+	if eyes_closed and chili_at_door:
+		chili_at_door = false
+		chili.visible = false
+		_chili_next_appear = randf_range(chili_appear_min, chili_appear_max)
+		contagion += contagion_rate * 3.0 * delta
+		contagion = minf(contagion, 1.0)
+
 	# 3. Energía: se drena cuando la puerta está cerrada.
 	if door_closed:
 		energy -= door_energy_drain * delta
@@ -381,13 +405,9 @@ func _update_views(delta: float) -> void:
 		fascination, delta)
 	zoom = camera.zoom_level
 
-	# Movimiento con la mano izquierda: cerca = adelante, lejos = atrás.
-	# Sin mano, vuelve al centro suavemente.
-	var target_z := 0.0
-	if EyeInput.zoom_hand:
-		target_z = lerpf(1.0, -1.3, EyeInput.hand_depth)
-	_camera_z = lerpf(_camera_z, target_z, 3.0 * delta)
-	camera.position.z = _camera_z
+	# El personaje es estático: no se mueve con la mano.
+	# (Futuro: mirar un objeto + puño = moverse hacia él.)
+	camera.position.z = 1.5
 
 	kaiser.apply(delta, contagion, EyeInput.hand, EyeInput.gesture == "Closed_Fist")
 
