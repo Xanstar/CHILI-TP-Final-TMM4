@@ -17,7 +17,7 @@ script = ExtResource("2_room")
 script = ExtResource("3_chili")
 
 [node name="Camera" type="Camera3D" parent="."]
-position = Vector3(0, 0.65, 0)
+position = Vector3(0, 0.65, 1.0)
 current = true
 script = ExtResource("4_camera")
 
