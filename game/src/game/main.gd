@@ -132,6 +132,10 @@ var _door_time := 0.0
 var _bait := 0.0
 var _bait_at := 2.0
 var _flash := 0.0
+var _p_pressed := false
+var _c_pressed := false
+var _saved_player_pos := Vector3.ZERO
+var _saved_chili_pos := Vector3.ZERO
 var _time := 0.0
 ## Pose de la cabeza con la que se calibró, en grados.
 var _head_offset := Vector2.ZERO
@@ -175,6 +179,22 @@ func _process(delta: float) -> void:
 	_update_hud()
 	_update_door_toggle(delta)
 	_update_movement(delta)
+	# Tecla P: guardar posición del jugador (spawn).
+	if Input.is_key_pressed(KEY_P) and not _p_pressed:
+		_p_pressed = true
+		_saved_player_pos = camera.global_position
+		_save_positions()
+		print("[POS] jugador guardado:", _saved_player_pos)
+	if not Input.is_key_pressed(KEY_P):
+		_p_pressed = false
+	# Tecla C: guardar posición de CHILI.
+	if Input.is_key_pressed(KEY_C) and not _c_pressed:
+		_c_pressed = true
+		_saved_chili_pos = camera.global_position
+		_save_positions()
+		print("[POS] chili guardado:", _saved_chili_pos)
+	if not Input.is_key_pressed(KEY_C):
+		_c_pressed = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -630,3 +650,15 @@ func _start_hint() -> String:
 ## Nada de esto se muestra en pantalla: es para depurar en la consola.
 func _notify(text: String) -> void:
 	print("[Main] ", text)
+
+
+## Guarda las posiciones elegidas por el jugador en un archivo.
+func _save_positions() -> void:
+	var file := FileAccess.open("user://positions.cfg", FileAccess.WRITE)
+	if file == null:
+		push_warning("No pude guardar posiciones")
+		return
+	file.store_line("player=%s" % _saved_player_pos)
+	file.store_line("chili=%s" % _saved_chili_pos)
+	file.close()
+	print("[POS] guardado en user://positions.cfg")
