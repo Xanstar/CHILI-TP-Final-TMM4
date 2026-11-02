@@ -36,7 +36,9 @@ game/                  Proyecto Godot 4.6 (abrí esta carpeta)
   dev/
     smoke.tscn         Prueba de humo sin ventana
 tracker/
-  tracker.py           Cámara -> UDP: mirada, parpadeo y gestos
+  tracker.py           Cámara -> UDP: cabeza, parpadeo y gestos
+  pose.py              Geometría de la cabeza (landmarks -> grados)
+  test_pose.py         Prueba de esa geometría, sin cámara
   models/              Modelos de MediaPipe
 ```
 
@@ -84,7 +86,7 @@ sin decir nada.
 
 | Acción | Con cámara | Con mouse |
 | --- | --- | --- |
-| Mirar / girar la cabeza | mover los ojos | mover el mouse |
+| Mirar / girar la cabeza | girar la cabeza | mover el mouse |
 | Elegir un remedio | palma derecha abierta | click derecho |
 | Agarrar | puño después de la palma | click izquierdo |
 | Entregar | abrir la mano mirando a CHILI | click derecho mirando a CHILI |
@@ -93,7 +95,7 @@ sin decir nada.
 | Mostrar datos | `F1` | `F1` |
 | Cambiar cámara/mouse | `F2` | `F2` |
 
-El juego arranca con `Enter`: poné la mirada en el centro y confirmá el cero.
+El juego arranca con `Enter`: poné la cabeza mirando al frente y confirmá el cero.
 
 Si no llega ningún paquete en 3 segundos, pasa solo a mouse y teclado. Si el
 tracker arranca después, vuelve a la cámara sin que hagas nada.
@@ -115,8 +117,8 @@ El tracker manda un JSON por paquete UDP a `127.0.0.1:4242`:
 ```json
 {
   "face": true,
-  "gaze_x": 0.12,
-  "gaze_y": -0.03,
+  "head_yaw": 12.4,
+  "head_pitch": -3.1,
   "blink_l": 0.02,
   "blink_r": 0.05,
   "hand": true,
@@ -126,9 +128,17 @@ El tracker manda un JSON por paquete UDP a `127.0.0.1:4242`:
 }
 ```
 
-- `gaze_x`: positivo mira hacia su izquierda. `gaze_y`: positivo mira arriba.
+- `head_yaw`: giro de la cabeza en grados. Positivo = hacia la izquierda del
+  jugador. `head_pitch`: cabeceo en grados, positivo = mentón arriba.
+- Los ángulos salen de la geometría de la cara (nariz contra esquinas de los
+  ojos), no de blendshapes: así "miro de reojo" y "giro la cabeza" no se
+  confunden, y el signo no depende de cómo esté espejada la imagen.
+- `blink_l` / `blink_r`: 0 = abierto, 1 = cerrado, cada ojo por separado. El
+  juego usa el párpado solo como efecto visual; penalizar exige que los dos
+  ojos queden cerrados más de medio segundo.
 - `gesture` / `zoom_gesture`: `"None"`, `"Open_Palm"`, `"Closed_Fist"`, etc.
-- Si `face` es `false`, el resto de los campos de la cara no vienen.
+- Si `face` es `false`, el resto de los campos de la cara no vienen. Eso es "sin
+  cámara", que no es lo mismo que "ojos cerrados".
 
 Para probar el juego sin Python alcanza con `--mouse`: no necesita el protocolo.
 
@@ -149,7 +159,10 @@ agarrar.
 
 ```bash
 godot --headless --path game res://dev/smoke.tscn
+python tracker/test_pose.py
 ```
 
-Levanta la escena real y ejercita agarrar, soltar y entregar un remedio. Sirve
-para verificar que un cambio en la lógica no rompió nada sin abrir el editor.
+La primera levanta la escena real y ejercita agarrar, soltar y entregar un
+remedio, además de comprobar que un parpadeo no dispara el estado "ojos
+cerrados" y que los ángulos de la cabeza llegan con el signo correcto. La
+segunda prueba la geometría de la cabeza sin cámara ni MediaPipe.

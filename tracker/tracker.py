@@ -1,8 +1,14 @@
 """Puente entre la camara y el juego.
 
 Lee la cara y las manos con MediaPipe y manda por UDP un JSON por cuadro con la
-mirada, el parpadeo y los gestos de cada mano. El juego escucha en el puerto
-4242 (ver game/src/input/eye_input.gd).
+pose de la cabeza, el parpadeo y los gestos de cada mano. El juego escucha en el
+puerto 4242 (ver game/src/input/eye_input.gd).
+
+La camara manda la POSE DE LA CABEZA, no la direccion de los ojos: los
+blendshapes de mirada son muy ruidosos y no distinguen "miro de reojo" de "giro
+la cabeza". Con landmarks, girar la cabeza mueve la nariz respecto de las
+esquinas de los ojos, y de ahi sale un angulo en grados (la cuenta vive en
+pose.py).
 
     python tracker.py                 # con ventana de la camara
     python tracker.py --no-preview    # solo manda datos
@@ -27,15 +33,15 @@ import numpy as np
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
+from pose import head_pose
+
 MODELS = Path(__file__).parent / "models"
 
 # Frame de la cara que se analiza siempre.
 FACE_MODEL = MODELS / "face_landmarker.task"
 HAND_MODEL = MODELS / "gesture_recognizer.task"
 
-# Un parpadeo cuenta como cerrado por encima de este valor.
-EYE_CLOSED = 0.6
-# Si una mano tapa la cara, se sostiene la ultima mirada este tiempo.
+# Si una mano tapa la cara, se sostiene la ultima pose este tiempo.
 FACE_GRACE = 1.5
 
 
@@ -87,7 +93,7 @@ class Tracker:
         hands = self._read_hands(frame, timestamp)
 
         # Si una mano tapa la cara, MediaPipe pierde la cara un instante:
-        # se sostiene la ultima mirada para que la cabeza no pegue saltos.
+        # se sostiene la ultima pose para que la cabeza no pegue saltos.
         if face is None and hands["hand"] and self._last_face is not None:
             if time.time() - self._last_face_at < FACE_GRACE:
                 face = self._last_face
@@ -108,7 +114,9 @@ class Tracker:
     def overlay(self, frame, payload: dict) -> None:
         """Dibuja el estado sobre el cuadro de la ventana de depuracion."""
         if payload["face"]:
-            text = f"mirada x {payload['gaze_x']:+.2f}  y {payload['gaze_y']:+.2f}   parpadeo {payload['blink_l']:.2f}"
+            text = (f"cabeza  yaw {payload['head_yaw']:+5.1f} deg   "
+                    f"pitch {payload['head_pitch']:+5.1f} deg   "
+                    f"parpadeo {payload['blink_l']:.2f}/{payload['blink_r']:.2f}")
         else:
             text = "sin cara"
         hands = f"derecha: {payload['gesture']}    izquierda: {payload['zoom_gesture']}"
@@ -131,19 +139,22 @@ class Tracker:
         image = mp.Image(image_format=mp.ImageFormat.SRGB,
                          data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         result = self._face.detect_for_video(image, timestamp)
-        if not result.face_blendshapes:
+        if not result.face_landmarks or not result.face_blendshapes:
+            return None
+
+        landmarks = result.face_landmarks[0]
+        height, width = frame.shape[:2]
+        angles = head_pose(landmarks, height, width)
+        if angles is None:
             return None
 
         shapes = {s.category_name: s.score for s in result.face_blendshapes[0]}
         face = {
+            # 0 = abierto, 1 = cerrado. Se manda cada ojo por separado: el
+            # juego decide que un parpadeo rapido no es "ojos cerrados".
             "blink_l": shapes["eyeBlinkLeft"],
             "blink_r": shapes["eyeBlinkRight"],
-            # Positivo = mira hacia su izquierda.
-            "gaze_x": ((shapes["eyeLookOutLeft"] + shapes["eyeLookInRight"])
-                       - (shapes["eyeLookInLeft"] + shapes["eyeLookOutRight"])) / 2,
-            # Positivo = mira hacia arriba.
-            "gaze_y": ((shapes["eyeLookUpLeft"] + shapes["eyeLookUpRight"])
-                       - (shapes["eyeLookDownLeft"] + shapes["eyeLookDownRight"])) / 2,
+            **angles,
         }
         self._last_face = face
         self._last_face_at = time.time()
@@ -194,9 +205,9 @@ class FakeSource:
         t = time.time() - self._started
         return {
             "face": True,
-            # Barrido lento de izquierda a derecha y vuelta.
-            "gaze_x": 0.35 * math.sin(t * 0.6),
-            "gaze_y": 0.15 * math.sin(t * 0.9),
+            # Barrido lento a los costados y un cabeceo mas rapido.
+            "head_yaw": 28.0 * math.sin(t * 0.6),
+            "head_pitch": 12.0 * math.sin(t * 0.9),
             "blink_l": 0.0,
             "blink_r": 0.0,
             "hand": False,

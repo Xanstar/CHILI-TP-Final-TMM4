@@ -3,14 +3,14 @@ extends Node3D
 ## Punto de entrada.
 ##
 ## Kaiser está paralizado en el medio de un cuarto. Solo puede mover la cabeza
-## (la mirada) y levantar la pata derecha (la mano). CHILI, el bicho, se muere en
+## y levantar la pata derecha (la mano). CHILI, el bicho, se muere en
 ## el piso de enfrente: hay que mirarlo de cerca, agarrar los tres remedios y
 ## entregárselos. Pero mirarlo también contagia, y la puerta siempre está ahí.
 ##
 ## Este archivo es el orquestador: lee la entrada, decide el estado del juego y
 ## empuja ese estado a la escena. Nada de geometría ni de dibujo acá.
 
-enum Focus { OTHER, ITEM, DOOR, CHILI, EYES_CLOSED }
+enum Focus { OTHER, ITEM, DOOR, CHILI, EYES_CLOSED, NO_SIGNAL }
 
 ## Los tres remedios: nombre, forma, color y lugar. Se crean en el _ready.
 enum Remedy { CYLINDER, CAPSULE, BOX }
@@ -56,7 +56,8 @@ const ENDINGS := {
 @export var remedy_memory := 1.5
 ## Segundos: si mirabas a CHILI hace menos que esto, cuenta como que lo mirás.
 @export var chili_memory := 1.2
-## Cuánto tiempo con los ojos cerrados cuenta como "cerrados".
+## Segundos con los dos ojos cerrados para que cuente como "ojos cerrados".
+## Es más largo que un parpadeo a propósito: parpadear no penaliza.
 @export var eyes_closed_delay := 0.5
 
 @export_group("CHILI")
@@ -105,9 +106,9 @@ var _door_time := 0.0
 var _bait := 0.0
 var _bait_at := 2.0
 var _flash := 0.0
-var _blind := 0.0
 var _time := 0.0
-var _gaze_offset := Vector2.ZERO
+## Pose de la cabeza con la que se calibró, en grados.
+var _head_offset := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -155,14 +156,14 @@ func _unhandled_input(event: InputEvent) -> void:
 #  ENTRADA
 # ============================================================
 
-## Mirar al centro y apretar Enter: fija el cero de la mirada y vuelve al frente.
+## Mirar al centro y apretar Enter: fija el cero de la cabeza y vuelve al frente.
 func _calibrate() -> void:
-	_gaze_offset = EyeInput.gaze
+	_head_offset = EyeInput.head
 	camera.recenter()
 	if not running:
 		running = true
 		hud.hide_hint()
-	print("[Main] calibrado: ", _gaze_offset)
+	print("[Main] calibrado: ", _head_offset)
 
 
 func _on_source_changed() -> void:
@@ -195,12 +196,14 @@ func _on_grab() -> void:
 func _update_camera(delta: float) -> void:
 	var obstructed := EyeInput.hand_obstructs() or (
 		EyeInput.uses_camera() and EyeInput.zoom_hand)
-	var can_look := EyeInput.face and EyeInput.blink < 0.5 and not obstructed
+	# Cerrar los ojos ya no frena la cabeza: la pose se lee igual de bien y al
+	# abrirlos otra vez no hay salto. Los ojos cerrados son otra mecánica.
+	var can_look := EyeInput.tracking and not obstructed
 	# Girar sobre sí mismo es más exigente: con una mano cerca de la cara la
 	# lectura de los bordes se vuelve falsa y la cabeza se iría sola.
-	var can_turn := can_look and EyeInput.blink < 0.3 \
+	var can_turn := can_look \
 		and not (EyeInput.uses_camera() and EyeInput.hand and carried == null)
-	camera.follow(EyeInput.gaze - _gaze_offset, can_look, can_turn, delta)
+	camera.follow(EyeInput.head - _head_offset, can_look, can_turn, delta)
 
 
 func _update_rules(delta: float) -> void:
@@ -222,7 +225,9 @@ func _update_rules(delta: float) -> void:
 
 	# 2. Qué está mirando en general.
 	var new_focus := Focus.OTHER
-	if eyes_closed:
+	if not EyeInput.tracking:
+		new_focus = Focus.NO_SIGNAL
+	elif eyes_closed:
 		new_focus = Focus.EYES_CLOSED
 	elif looked_remedy != null:
 		new_focus = Focus.ITEM
@@ -324,8 +329,9 @@ func _update_views(delta: float) -> void:
 	kaiser.apply(delta, contagion, EyeInput.hand, EyeInput.gesture == "Closed_Fist")
 
 	hud.set_vignette(fascination * 0.4 + contagion * 0.9)
-	_blind = move_toward(_blind, 1.0 if _is_blind() else 0.0, 4.0 * delta)
-	hud.set_blind(_blind)
+	# El párpado sigue al parpadeo, no a la mecánica: se cierra de verdad.
+	hud.set_eyelids(EyeInput.blink)
+	hud.set_status(_status_text())
 
 	for remedy in remedies:
 		remedy.set_highlight(_highlight_for(remedy))
@@ -341,9 +347,16 @@ func _highlight_for(remedy: Pickup) -> float:
 	return 0.25
 
 
-func _is_blind() -> bool:
-	return running and not finished and not EyeInput.hand \
-		and EyeInput.eyes_closed_time > eyes_closed_delay
+## Aviso corto arriba de la pantalla. Cada problema dice lo suyo, en vez de
+## apagar todo y dejar al jugador adivinando qué pasó.
+func _status_text() -> String:
+	if not running or finished or EyeInput.hand:
+		return ""
+	if not EyeInput.tracking:
+		return "sin cámara — el juego sigue con la última pose"
+	if EyeInput.eyes_closed_time > eyes_closed_delay:
+		return "ojos cerrados"
+	return ""
 
 
 func _update_hud() -> void:
@@ -356,21 +369,21 @@ func _update_hud() -> void:
 
 
 func _debug_text() -> String:
-	var gaze := EyeInput.gaze - _gaze_offset
+	var head := EyeInput.head - _head_offset
 	var hand_text := EyeInput.gesture if EyeInput.hand else "ninguna"
 	var palm_text := " (lista)" if EyeInput.palm_ready else ""
 	var zoom_text := EyeInput.zoom_gesture if EyeInput.zoom_hand else "ninguna"
 	var carried_text := carried.item_name if carried != null else "-"
 	var source_text := "cámara" if EyeInput.uses_camera() else "mouse"
-	return """mirada: (%.2f, %.2f)   ojos cerrados: %.1fs   entrada: %s
+	return """cabeza: %+.1f° %+.1f°   párpados: %.2f/%.2f   ojos cerrados: %.1fs
+entrada: %s   foco: %s   rumbo: %d°
 mano der: %s%s   mano izq: %s   zoom: %.2f
-foco: %s   rumbo: %d°
 fascinación: %.2f   contagio: %.2f
 gravedad CHILI: %.2f   entregados: %d/%d   en la mano: %s
 [Enter] recalibrar   [F1] ocultar esto   [F2] cámara/mouse""" % [
-		gaze.x, gaze.y, EyeInput.eyes_closed_time, source_text,
+		head.x, head.y, EyeInput.blink_l, EyeInput.blink_r, EyeInput.eyes_closed_time,
+		source_text, Focus.keys()[focus], camera.heading_degrees(),
 		hand_text, palm_text, zoom_text, zoom,
-		Focus.keys()[focus], camera.heading_degrees(),
 		fascination, contagion,
 		gravity, delivered, remedies.size(), carried_text,
 	]
@@ -444,8 +457,8 @@ func _first_available(candidate: Pickup) -> Pickup:
 
 
 func _start_hint() -> String:
-	var control := "la mirada" if EyeInput.uses_camera() else "el mouse"
-	return "Poné %s en el centro\ny apretá ENTER para empezar" % control
+	var control := "la cabeza" if EyeInput.uses_camera() else "el mouse"
+	return "Poné %s mirando al frente\ny apretá ENTER para empezar" % control
 
 
 ## Nada de esto se muestra en pantalla: es para depurar en la consola.

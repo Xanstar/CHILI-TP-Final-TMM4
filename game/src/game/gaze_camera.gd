@@ -2,26 +2,34 @@ class_name GazeCamera
 extends Camera3D
 ## La cabeza de Kaiser.
 ##
-## Kaiser está paralizado: no camina, solo mueve la cabeza. La mirada mueve la
-## cabeza dentro de un rango corto, y si la sostiene contra un borde empieza a
-## girar sobre sí mismo, así puede terminar de dar la vuelta (360°) mirando.
+## Kaiser está paralizado: no camina, solo mueve la cabeza. La cabeza del
+## jugador se copia casi uno a uno, en grados: girar 20° la cabeza gira 20° la
+## cámara. Si la sostiene contra un borde, empieza a girar sobre sí mismo, así
+## puede terminar de dar la vuelta (360°) girando la cabeza.
 
 @export_group("Sensibilidad")
-## Grados de giro por unidad de mirada.
-@export var yaw_per_gaze := 90.0
-@export var pitch_per_gaze := 60.0
-## Cuánto gira la cabeza solo con mover los ojos.
+## Multiplicador del giro. 1.0 = uno a uno con la cabeza.
+@export var gain := 1.0
+## Grados de zona muerta: por debajo no se mueve, así no tiembla quieto.
+@export var dead_zone := 1.5
+## Cuánto gira la cabeza como máximo sin empezar el giro completo.
 @export var max_yaw := 38.0
 @export var max_pitch := 22.0
+## Escapes por si la cámara quedara al revés en tu setup.
 @export var invert_x := false
 @export var invert_y := false
+## Suavizado del movimiento (más alto, más seco). La entrada ya suaviza, así que
+## acá va alto a propósito: dos filtros lentos en cascada se sienten pesados.
+@export var smoothing := 30.0
 
 @export_group("Giro completo")
-## Valor de mirada a partir del cual la cabeza sigue girando.
-@export var edge_threshold := 0.45
-## Segundos que hay que sostener la mirada en el borde para que empiece a girar.
-@export var edge_delay := 0.5
+## Grados de cabeza a partir de los cuales la cabeza sigue girando.
+@export var edge_threshold := 22.0
+## Segundos que hay que sostenerlo para que arranque el giro.
+@export var edge_delay := 0.4
 @export var edge_speed := 90.0
+## Grados extra de cabeza que hacen falta para llegar a la velocidad máxima.
+@export var edge_ramp := 18.0
 
 @export_group("Zoom")
 @export var base_fov := 75.0
@@ -36,27 +44,31 @@ var heading := 0.0
 
 var _yaw := 0.0
 var _pitch := 0.0
-var _yaw_target := 0.0
-var _pitch_target := 0.0
 var _edge_time := 0.0
 
 
-## [param can_look] es false si no hay lectura confiable de la mirada.
+## [param head] es la pose del jugador en grados (X = giro, Y = cabeceo).
+## [param can_look] es false si no hay lectura confiable de la cabeza.
 ## [param can_turn] además exige que nada tape la cara.
-func follow(gaze: Vector2, can_look: bool, can_turn: bool, delta: float) -> void:
-	var precision := lerpf(1.0, zoom_fov / base_fov, zoom_level)
+func follow(head: Vector2, can_look: bool, can_turn: bool, delta: float) -> void:
+	var yaw_target := 0.0
+	var pitch_target := 0.0
 
 	if can_look:
-		var gx := gaze.x * (-1.0 if invert_x else 1.0)
-		var gy := gaze.y * (-1.0 if invert_y else 1.0)
-		_yaw_target = clampf(gx * yaw_per_gaze * precision, -max_yaw, max_yaw)
-		_pitch_target = clampf(gy * pitch_per_gaze * precision, -max_pitch, max_pitch)
-		_turn_if_edge(gx, can_turn and zoom_level < 0.2, delta)
+		var hx := head.x * (-1.0 if invert_x else 1.0)
+		var hy := head.y * (-1.0 if invert_y else 1.0)
+		# Con zoom el campo visual se cierra: el mismo giro mueve menos la
+		# imagen, que es justo lo que hace falta para apuntar fino.
+		var precision := lerpf(1.0, zoom_fov / base_fov, zoom_level)
+		yaw_target = clampf(_beyond_dead_zone(hx) * gain * precision, -max_yaw, max_yaw)
+		pitch_target = clampf(_beyond_dead_zone(hy) * gain * precision, -max_pitch, max_pitch)
+		_turn_if_edge(hx, can_turn and zoom_level < 0.2, delta)
 	else:
 		_edge_time = maxf(_edge_time - 2.0 * delta, 0.0)
 
-	_yaw = lerpf(_yaw, _yaw_target, 5.0 * delta)
-	_pitch = lerpf(_pitch, _pitch_target, 5.0 * delta)
+	var rate := 1.0 - exp(-smoothing * delta)
+	_yaw = lerpf(_yaw, yaw_target, rate)
+	_pitch = lerpf(_pitch, pitch_target, rate)
 	rotation_degrees = Vector3(_pitch, heading + _yaw, 0.0)
 
 
@@ -72,8 +84,6 @@ func recenter() -> void:
 	heading = 0.0
 	_yaw = 0.0
 	_pitch = 0.0
-	_yaw_target = 0.0
-	_pitch_target = 0.0
 	_edge_time = 0.0
 
 
@@ -82,11 +92,17 @@ func heading_degrees() -> int:
 	return int(fposmod(heading + _yaw, 360.0))
 
 
-func _turn_if_edge(gx: float, allowed: bool, delta: float) -> void:
-	if allowed and absf(gx) > edge_threshold:
-		_edge_time += delta
-		if _edge_time > edge_delay:
-			var push := minf(absf(gx) - edge_threshold, 0.3) / 0.3
-			heading += signf(gx) * push * edge_speed * delta
-	else:
+## Quita la zona muerta sin cambiar la escala: 5° con zona de 1.5° son 3.5°.
+func _beyond_dead_zone(degrees: float) -> float:
+	return signf(degrees) * maxf(absf(degrees) - dead_zone, 0.0)
+
+
+func _turn_if_edge(yaw: float, allowed: bool, delta: float) -> void:
+	if not allowed or absf(yaw) <= edge_threshold:
 		_edge_time = maxf(_edge_time - 2.0 * delta, 0.0)
+		return
+
+	_edge_time += delta
+	if _edge_time > edge_delay:
+		var push := clampf((absf(yaw) - edge_threshold) / edge_ramp, 0.0, 1.0)
+		heading += signf(yaw) * push * edge_speed * delta
