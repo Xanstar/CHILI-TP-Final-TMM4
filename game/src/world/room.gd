@@ -17,6 +17,7 @@ var _medicine_cabinet: Node3D = null
 
 func build(clear_zones: Array[Vector3]) -> void:
 	_clear_zones = clear_zones
+	_ensure_texture()
 	_build_environment()
 	_build_floor()
 	_build_walls()
@@ -140,5 +141,37 @@ func _place(model_name: String, at: Vector3, yaw_degrees: float, scale: float) -
 	instance.position = at
 	instance.rotation_degrees.y = yaw_degrees
 	instance.scale = Vector3.ONE * scale
+	_fix_materials(instance)
 	add_child(instance)
 	return instance
+
+
+## El importador de Godot no vincula la textura del GLTF. Se la asigna a mano.
+func _fix_materials(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		var mesh := mi.mesh
+		if mesh != null:
+			for i in mesh.get_surface_count():
+				var mat := mesh.surface_get_material(i)
+				if mat is StandardMaterial3D:
+					var smat := mat as StandardMaterial3D
+					if smat.albedo_texture == null:
+						smat.albedo_texture = _texture
+	# Also check material_override
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.material_override is StandardMaterial3D:
+			var smat := mi.material_override as StandardMaterial3D
+			if smat.albedo_texture == null:
+				smat.albedo_texture = _texture
+	for child in node.get_children():
+		_fix_materials(child)
+
+
+var _texture: Texture2D = null
+
+
+func _ensure_texture() -> void:
+	if _texture == null:
+		_texture = load("res://assets/bathroom/tiny_treats_texture_1.png") as Texture2D
