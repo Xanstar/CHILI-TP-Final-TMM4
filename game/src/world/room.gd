@@ -12,6 +12,19 @@ const SEED := 7
 
 var _clear_zones: Array[Vector3] = []
 var glb_door: Node3D = null
+var _door_original_rotation: Vector3 = Vector3.ZERO
+var _door_closed := false
+
+
+func set_door_closed(closed: bool) -> void:
+	if glb_door == null:
+		return
+	_door_closed = closed
+	if closed:
+		# Rotar la puerta 90 grados para "cerrarla".
+		glb_door.rotation_degrees.y = _door_original_rotation.y + 90.0
+	else:
+		glb_door.rotation_degrees.y = _door_original_rotation.y
 
 
 func build(clear_zones: Array[Vector3]) -> void:
@@ -35,6 +48,7 @@ func _find_glb_door() -> void:
 			best_door = d
 	if best_door != null:
 		glb_door = best_door
+		_door_original_rotation = best_door.rotation_degrees
 	else:
 		print("GLB door NOT found")
 
@@ -100,7 +114,7 @@ func _build_bathroom() -> void:
 	# Posicionar el baño para que la puerta quede frente al jugador.
 	# La puerta está en el origen del GLB; el baño se extiende en +X y +Z.
 	bathroom.scale = Vector3.ONE * 1.0
-	bathroom.position = Vector3(0, -0.5, -2.0)
+	bathroom.position = Vector3(0, -0.5, 0)
 	add_child(bathroom)
 	# Luces tenues para ambiente de terror.
 	Shapes.add_light(self, Vector3(0, 3.0, 0), Color(0.8, 0.75, 0.6), 1.5, 12.0)

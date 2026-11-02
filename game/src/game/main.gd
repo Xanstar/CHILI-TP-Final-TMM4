@@ -83,7 +83,6 @@ const ENDINGS := {
 
 @onready var room: Room = $Room
 @onready var chili: Chili = $Chili
-@onready var door: Door = $Door
 @onready var camera: GazeCamera = $Camera
 @onready var kaiser: KaiserBody = $Camera/Kaiser
 @onready var hud: Hud = $Hud
@@ -139,10 +138,9 @@ var _head_offset := Vector2.ZERO
 
 
 func _ready() -> void:
-	_build_layout()
 	room.build(_clear_zones())
+	_build_layout()
 	chili.build()
-	door.build()
 	kaiser.build()
 	hud.build()
 	hud.set_debug_visible(show_debug_hud)
@@ -236,19 +234,19 @@ func _update_door_toggle(delta: float) -> void:
 	_door_toggle_cooldown = maxf(_door_toggle_cooldown - delta, 0.0)
 	if _door_toggle_cooldown > 0.0:
 		return
-	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 30.0
+	var looking_at_door := _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0
 	if running:
 		pass
 	if not looking_at_door or not EyeInput.hand:
 		return
 	if EyeInput.gesture == "Closed_Fist" and not door_closed:
 		door_closed = true
-		door.set_closed(true)
+		room.set_door_closed(true)
 		_door_toggle_cooldown = 0.5
 		_notify("Puerta cerrada")
 	elif EyeInput.gesture == "Open_Palm" and door_closed:
 		door_closed = false
-		door.set_closed(false)
+		room.set_door_closed(false)
 		_door_toggle_cooldown = 0.5
 		_notify("Puerta abierta")
 
@@ -298,7 +296,7 @@ func _update_rules(delta: float) -> void:
 		chili_at_door = true
 		chili.visible = true
 		# Colocar CHILI justo afuera de la puerta.
-		chili.position = door.position + Vector3(0, 0, -1.5)
+		chili.position = room.glb_door.position + Vector3(0, 0, -1.5)
 		chili.rotation_degrees.y = 180.0
 		_chili_stay_timer = 0.0
 		_chili_appear_timer = 0.0
@@ -400,7 +398,8 @@ func _update_views(delta: float) -> void:
 	hud.set_target(_target_text())
 
 	# Puerta: visual de abierta/cerrada.
-	door.set_closed(door_closed)
+	if room.glb_door != null:
+		room.set_door_closed(door_closed)
 
 	# Luces.
 	if _blackout_active:
@@ -458,7 +457,7 @@ func _target_text() -> String:
 		return ""
 	if door_closed:
 		return "puerta cerrada"
-	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 30.0
+	var looking_at_door := _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0
 	if looking_at_door:
 		if door_closed:
 			return "puerta cerrada — puño para abrir"
@@ -503,8 +502,6 @@ gravedad CHILI: %.2f   entregados: %d/%d   en la mano: %s
 
 func _build_layout() -> void:
 	chili.visible = false
-	door.position = Shapes.polar(DOOR_YAW, DOOR_DISTANCE, 0.0)
-	door.rotation_degrees.y = DOOR_YAW
 
 	for data in REMEDIES:
 		var remedy := Pickup.new()
