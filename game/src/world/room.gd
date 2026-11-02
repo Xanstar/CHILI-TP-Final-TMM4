@@ -25,7 +25,7 @@ func set_door_closed(closed: bool) -> void:
 		glb_door.rotation_degrees.y = 90.0
 	else:
 		# Abierta: hacia el pasillo (donde está CHILI).
-		glb_door.rotation_degrees.y = 180.0
+		glb_door.rotation_degrees.y = -90.0
 
 
 func build(clear_zones: Array[Vector3]) -> void:

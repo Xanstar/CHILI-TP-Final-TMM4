@@ -300,7 +300,7 @@ func _update_rules(delta: float) -> void:
 		chili_at_door = true
 		chili.visible = true
 		# Colocar CHILI justo afuera de la puerta.
-		chili.position = room.glb_door.position + Vector3(0, 0, -1.5)
+		chili.position = room.glb_door.global_position + Vector3(0, 0, -1.5)
 		chili.rotation_degrees.y = 180.0
 		_chili_stay_timer = 0.0
 		_chili_appear_timer = 0.0
