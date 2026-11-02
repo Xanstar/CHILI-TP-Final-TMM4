@@ -134,6 +134,10 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_time += delta
 	_update_camera(delta)
+	# Si el jugador no calibra a mano, lo hacemos solos después de un par de
+	# segundos con la cabeza quieta: el juego no debería quedar muerto.
+	if not running and not finished and EyeInput.tracking and _time > 2.0:
+		_calibrate()
 	if running and not finished:
 		_update_rules(delta)
 	_update_views(delta)
@@ -350,8 +354,12 @@ func _highlight_for(remedy: Pickup) -> float:
 ## Aviso corto arriba de la pantalla. Cada problema dice lo suyo, en vez de
 ## apagar todo y dejar al jugador adivinando qué pasó.
 func _status_text() -> String:
-	if not running or finished or EyeInput.hand:
+	if finished or EyeInput.hand:
 		return ""
+	if not running:
+		if not EyeInput.tracking:
+			return "sin cámara — acercate al centro"
+		return "mirá al frente — arranca solo"
 	if not EyeInput.tracking:
 		return "sin cámara — el juego sigue con la última pose"
 	if EyeInput.eyes_closed_time > eyes_closed_delay:

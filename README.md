@@ -39,6 +39,7 @@ tracker/
   tracker.py           Cámara -> UDP: cabeza, parpadeo y gestos
   pose.py              Geometría de la cabeza (landmarks -> grados)
   test_pose.py         Prueba de esa geometría, sin cámara
+  probe.py             Prueba en vivo: detección y pose, con ventana guía
   models/              Modelos de MediaPipe
 ```
 
@@ -166,3 +167,8 @@ La primera levanta la escena real y ejercita agarrar, soltar y entregar un
 remedio, además de comprobar que un parpadeo no dispara el estado "ojos
 cerrados" y que los ángulos de la cabeza llegan con el signo correcto. La
 segunda prueba la geometría de la cabeza sin cámara ni MediaPipe.
+
+Si la cámara no te detecta bien, corré `python tracker/probe.py`: abre la
+cámara, te guía por seis posiciones con una ventana y guarda un JSON con las
+lecturas y un PNG por fase. Sirve para saber si el problema es de detección
+(no hay cara) o de la cuenta (los ángulos no se mueven).

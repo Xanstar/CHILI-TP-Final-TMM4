@@ -26,9 +26,10 @@ EYE_CORNER_A = 33
 EYE_CORNER_B = 263
 NOSE_TIP = 1
 
-# Cuanto sobresale la nariz respecto del ancho entre esquinas oculares (~0.25 en
-# una cara real; se deja un poco alto para que el juego no se vuelva nervioso).
-NOSE_DEPTH_RATIO = 0.30
+# Cuanto sobresale la nariz respecto del ancho entre esquinas oculares. El valor
+# teorico es ~0.25, pero la prueba en vivo mostro que 0.30 exageraba el angulo
+# (66 grados para un giro de ~50). 0.50 lo acerca a la realidad.
+NOSE_DEPTH_RATIO = 0.50
 # Cuanto cae la punta de la nariz por debajo de la linea de los ojos con la cara
 # derecha. El cero real lo fija la calibracion del juego.
 NOSE_HEIGHT_RATIO = 0.32

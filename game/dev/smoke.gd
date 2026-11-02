@@ -83,7 +83,9 @@ func _check_input() -> void:
 	# Sin cara no es "ojos cerrados" ni debe arrastrar el estado.
 	for i in 120:
 		EyeInput._ingest(_face_frame(1.0, 1.0), step)
-	EyeInput._ingest({"face": false}, step)
+	# La gracia de seguimiento es 0.4 s: hay que superarla para que se pierda.
+	for i in 30:
+		EyeInput._ingest({"face": false}, step)
 	_expect(not EyeInput.tracking, "sin cara se pierde el seguimiento")
 	_expect(EyeInput.eyes_closed_time == 0.0, "sin cara no es ojos cerrados")
 

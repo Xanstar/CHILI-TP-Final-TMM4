@@ -24,11 +24,14 @@ const STALE_AFTER := 1.0
 ## Segundos sin cámara antes de pasar solo a mouse y teclado.
 const FALLBACK_AFTER := 3.0
 ## Qué tan rápido alcanza la pose su valor nuevo (más alto, más seco).
-const HEAD_SMOOTHING := 20.0
+const HEAD_SMOOTHING := 12.0
 ## Lo mismo para los párpados: más rápido, porque un parpadeo dura poco.
 const BLINK_SMOOTHING := 25.0
 ## Por encima de esto un ojo cuenta como cerrado.
 const EYES_CLOSED := 0.6
+## Segundos sin cara antes de dar la lectura por perdida. Un poco de gracia para
+## no parpadear entre "sigue" y "se perdió" cuando la cara se sale un instante.
+const TRACKING_GRACE := 0.4
 
 const PALM_HOLD := 0.3
 const FIST_HOLD := 0.1
@@ -38,6 +41,8 @@ var source := Source.CAMERA
 
 ## Hay una cara en cámara: hay lectura de cabeza confiable.
 var tracking := false
+var _raw_tracking := false
+var _tracking_missing := 0.0
 ## Pose de la cabeza en grados: X = giro (+ a su izquierda), Y = cabeceo (+ arriba).
 var head := Vector2.ZERO
 ## Párpados por separado, 0 = abierto y 1 = cerrado.
@@ -106,6 +111,8 @@ func set_source(new_source: Source) -> void:
 	source = new_source
 	_last_frame_at = _time if new_source == Source.CAMERA else -1000.0
 	tracking = new_source == Source.MOUSE
+	_raw_tracking = tracking
+	_tracking_missing = 0.0
 	head = Vector2.ZERO
 	blink_l = 0.0
 	blink_r = 0.0
@@ -135,13 +142,15 @@ func uses_camera() -> bool:
 
 
 func _ingest(frame: Dictionary, delta: float) -> void:
-	tracking = frame.get("face", false)
+	_raw_tracking = frame.get("face", false)
 	hand = frame.get("hand", false)
 	gesture = frame.get("gesture", "None")
 	zoom_hand = frame.get("zoom_hand", false)
 	zoom_gesture = frame.get("zoom_gesture", "None")
 
-	if tracking:
+	if _raw_tracking:
+		_tracking_missing = 0.0
+		tracking = true
 		var target := Vector2(frame.get("head_yaw", 0.0), frame.get("head_pitch", 0.0))
 		head = head.lerp(target, _approach(HEAD_SMOOTHING, delta))
 
@@ -161,6 +170,10 @@ func _ingest(frame: Dictionary, delta: float) -> void:
 	else:
 		# Sin cara no es "ojos cerrados": es que no hay lectura. Se apagan los
 		# párpados y la mecánica, sin castigar al jugador por una cámara caída.
+		# Un poco de gracia para no parpadear entre "sigue" y "se perdió".
+		_tracking_missing += delta
+		if _tracking_missing > TRACKING_GRACE:
+			tracking = false
 		_release_eyes(delta)
 
 
@@ -184,7 +197,10 @@ func _watch_for_stall(delta: float) -> void:
 		set_source(Source.MOUSE)
 	elif silent > STALE_AFTER:
 		# Se cortó el paquete: no nos quedamos con la última pose congelada.
-		tracking = false
+		_raw_tracking = false
+		_tracking_missing += delta
+		if _tracking_missing > TRACKING_GRACE:
+			tracking = false
 		hand = false
 		gesture = "None"
 		zoom_hand = false
