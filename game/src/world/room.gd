@@ -77,25 +77,25 @@ func _build_walls() -> void:
 
 
 func _build_fixtures() -> void:
-	# Botiquín: ahí viven los remedios.
-	_medicine_cabinet = _place("cabinet_bathroom", Vector3(-4.0, 1.2, -1.5), -20.0, 1.0)
+	# Botiquín: ahí viven los remedios. Cerca del centro para que se vea.
+	_medicine_cabinet = _place("cabinet_bathroom", Vector3(-2.5, 1.2, -2.0), -20.0, 1.0)
 	# Espejo y lavabo cerca del botiquín.
-	_place("mirror", Vector3(-5.0, 1.5, -1.0), -20.0, 1.0)
-	# Bañera en la otra esquina.
-	_place("bath", Vector3(8.0, 0, -8.0), 45.0, 1.0)
+	_place("mirror", Vector3(-3.5, 1.5, -1.5), -20.0, 1.0)
+	# Bañera en una esquina (más cerca).
+	_place("bath", Vector3(5.0, 0, -5.0), 45.0, 1.0)
 	# Toalla.
-	_place("towel_stacked", Vector3(-3.0, 1.0, -0.5), -20.0, 1.0)
+	_place("towel_stacked", Vector3(-2.0, 1.0, -0.5), -20.0, 1.0)
 	# Estante con cosas.
-	_place("wall_shelf", Vector3(-6.0, 1.5, -4.0), -20.0, 1.0)
-	_place("container_bathroom_A_blue", Vector3(-6.0, 1.7, -4.0), -20.0, 1.0)
+	_place("wall_shelf", Vector3(-4.0, 1.5, -3.0), -20.0, 1.0)
+	_place("container_bathroom_A_blue", Vector3(-4.0, 1.7, -3.0), -20.0, 1.0)
 	# Planta y patito.
-	_place("plant", Vector3(6.0, 0, 6.0), 0.0, 1.0)
-	_place("ducky", Vector3(7.0, 0.5, -7.0), 0.0, 1.0)
+	_place("plant", Vector3(4.0, 0, 4.0), 0.0, 1.0)
+	_place("ducky", Vector3(4.5, 0.5, -4.5), 0.0, 1.0)
 	# Alfombra.
-	_place("mat", Vector3(0, 0.01, 2.0), 0.0, 1.0)
+	_place("mat", Vector3(0, 0.01, 1.5), 0.0, 1.0)
 	# Luces.
 	Shapes.add_light(self, Vector3(0, 4.0, 0), Color(1.0, 0.95, 0.85), 2.0, 15.0)
-	Shapes.add_light(self, Vector3(-4.0, 2.5, -1.5), Color(1.0, 0.9, 0.7), 1.0, 6.0)
+	Shapes.add_light(self, Vector3(-2.5, 2.5, -2.0), Color(1.0, 0.9, 0.7), 1.0, 6.0)
 
 
 func _build_clutter() -> void:

@@ -19,17 +19,17 @@ const REMEDIES := [
 	{
 		"name": "Venda", "shape": Remedy.CYLINDER,
 		"color": Color(0.9, 0.9, 0.85),
-		"yaw": 55.0, "distance": 4.0, "height": 0.8,
+		"yaw": -15.0, "distance": 3.0, "height": 0.8,
 	},
 	{
 		"name": "Frasco", "shape": Remedy.CAPSULE,
 		"color": Color(0.9, 0.55, 0.1),
-		"yaw": 70.0, "distance": 4.0, "height": 1.3,
+		"yaw": -30.0, "distance": 3.0, "height": 1.3,
 	},
 	{
 		"name": "Paño", "shape": Remedy.BOX,
 		"color": Color(0.3, 0.6, 0.7),
-		"yaw": 85.0, "distance": 4.0, "height": 1.0,
+		"yaw": 0.0, "distance": 3.0, "height": 1.0,
 	},
 ]
 
