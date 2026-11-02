@@ -21,11 +21,11 @@ func set_door_closed(closed: bool) -> void:
 		return
 	_door_closed = closed
 	if closed:
-		# Cerrada: alineada con la pared (rotación Y = 0).
-		glb_door.rotation_degrees.y = 0.0
+		# Cerrada: alineada con la pared.
+		glb_door.rotation_degrees.y = 90.0
 	else:
-		# Abierta: posición original del asset.
-		glb_door.rotation_degrees.y = _door_original_rotation.y
+		# Abierta: hacia el pasillo (donde está CHILI).
+		glb_door.rotation_degrees.y = 0.0
 
 
 func build(clear_zones: Array[Vector3]) -> void:
