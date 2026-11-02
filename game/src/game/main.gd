@@ -51,9 +51,9 @@ const ENDINGS := {
 @export_group("Mirada")
 ## Grados de apertura: qué tan lejos del centro sigue contando como "estás mirando".
 @export var focus_angle := 15.0
-@export var remedy_angle := 9.0
+@export var remedy_angle := 15.0
 ## Segundos que se recuerda el último remedio mirado.
-@export var remedy_memory := 1.5
+@export var remedy_memory := 2.0
 ## Segundos: si mirabas a CHILI hace menos que esto, cuenta como que lo mirás.
 @export var chili_memory := 1.2
 ## Segundos con los dos ojos cerrados para que cuente como "ojos cerrados".
@@ -97,6 +97,7 @@ var chase := 0.0
 var delivered := 0
 var carried: Pickup = null
 var looked_remedy: Pickup = null
+var targeted_remedy: Pickup = null
 
 var _last_remedy: Pickup = null
 var _time_without_remedy := 100.0
@@ -176,15 +177,19 @@ func _on_source_changed() -> void:
 
 
 ## El gesto lo detecta EyeInput: palma abierta y después puño, con la mano derecha.
+## También se puede agarrar directo con puño si se está mirando un remedio.
 func _on_grab() -> void:
 	if not running or finished:
 		return
 	if carried != null:
 		_notify("Ya tenés algo en la mano")
 		return
-	var target := _first_available(looked_remedy)
+	var target: Pickup = _first_available(looked_remedy)
 	if target == null and _time_without_remedy < remedy_memory:
 		target = _first_available(_last_remedy)
+	# Lock-on: si no está mirando de frente, agarra el más cercano en rango.
+	if target == null:
+		target = _first_available(targeted_remedy)
 	if target == null:
 		_notify("No estás mirando ningún remedio")
 		return
@@ -226,6 +231,10 @@ func _update_rules(delta: float) -> void:
 			_last_remedy = looked_remedy
 			_time_without_remedy = 0.0
 	_time_without_remedy += delta
+
+	# Objetivo de lock-on: el remedio más cercano dentro de un rango amplio.
+	# No hace falta mirarlo de frente para que se marque como objetivo.
+	targeted_remedy = _closest_remedy(20.0)
 
 	# 2. Qué está mirando en general.
 	var new_focus := Focus.OTHER
@@ -337,6 +346,14 @@ func _update_views(delta: float) -> void:
 	hud.set_eyelids(EyeInput.blink)
 	hud.set_status(_status_text())
 
+	# Objetivo de lock-on: qué remedio está en la mira.
+	var target_text := ""
+	if running and not finished and targeted_remedy != null and carried == null:
+		target_text = targeted_remedy.item_name
+		if looked_remedy == targeted_remedy:
+			target_text += "  —  " + ("agarrable" if EyeInput.palm_ready else "miralo")
+	hud.set_target(target_text)
+
 	for remedy in remedies:
 		remedy.set_highlight(_highlight_for(remedy))
 	door.set_urgency(_door_time / door_hold)
@@ -348,6 +365,9 @@ func _highlight_for(remedy: Pickup) -> float:
 	if remedy == looked_remedy:
 		# El brillo máximo es la señal de "ahora podés agarrarlo".
 		return 3.0 if EyeInput.palm_ready else 1.6
+	if remedy == targeted_remedy:
+		# En la mira: se ve que está disponible, aunque no esté centrado.
+		return 1.2 if EyeInput.palm_ready else 0.7
 	return 0.25
 
 
@@ -451,6 +471,18 @@ func _angle_to(target: Node3D, offset: Vector3) -> float:
 func _remedy_in_sight() -> Pickup:
 	var closest: Pickup = null
 	var best := remedy_angle
+	for remedy in remedies:
+		if remedy.is_available():
+			var angle := _angle_to(remedy, Vector3.ZERO)
+			if angle < best:
+				best = angle
+				closest = remedy
+	return closest
+
+
+func _closest_remedy(range_degrees: float) -> Pickup:
+	var closest: Pickup = null
+	var best := range_degrees
 	for remedy in remedies:
 		if remedy.is_available():
 			var angle := _angle_to(remedy, Vector3.ZERO)

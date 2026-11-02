@@ -29,6 +29,7 @@ var _lid_bottom: ColorRect
 var _ending_background: ColorRect
 var _center: Label
 var _status: Label
+var _target: Label
 var _debug: Label
 var _pending: Label
 
@@ -61,6 +62,17 @@ func build() -> void:
 	_status.add_theme_constant_override("outline_size", 6)
 	_status.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	_status.visible = false
+
+	_target = Label.new()
+	add_child(_target)
+	_target.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_target.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_target.offset_bottom = -24.0
+	_target.add_theme_font_size_override("font_size", 22)
+	_target.add_theme_color_override("font_color", Color(0.7, 1, 0.7, 0.95))
+	_target.add_theme_constant_override("outline_size", 6)
+	_target.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_target.visible = false
 
 	_debug = Label.new()
 	_debug.position = Vector2(12, 8)
@@ -119,6 +131,12 @@ func set_eyelids(amount: float) -> void:
 func set_status(text: String) -> void:
 	_status.text = text
 	_status.visible = not text.is_empty()
+
+
+## Muestra el nombre del remedio que está en la mira y si se puede agarrar.
+func set_target(text: String) -> void:
+	_target.text = text
+	_target.visible = not text.is_empty()
 
 
 func set_pending(names: PackedStringArray, visible: bool) -> void:

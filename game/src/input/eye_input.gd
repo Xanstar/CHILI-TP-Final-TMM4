@@ -33,9 +33,9 @@ const EYES_CLOSED := 0.6
 ## no parpadear entre "sigue" y "se perdió" cuando la cara se sale un instante.
 const TRACKING_GRACE := 0.4
 
-const PALM_HOLD := 0.3
-const FIST_HOLD := 0.1
-const GRAB_COOLDOWN := 0.8
+const PALM_HOLD := 0.15
+const FIST_HOLD := 0.05
+const GRAB_COOLDOWN := 0.5
 
 var source := Source.CAMERA
 
