@@ -346,7 +346,7 @@ func _update_views(delta: float) -> void:
 	# Sin mano, vuelve al centro suavemente.
 	var target_z := 0.0
 	if EyeInput.zoom_hand:
-		target_z = lerpf(1.0, -1.5, EyeInput.hand_depth)
+		target_z = lerpf(0.7, -1.0, EyeInput.hand_depth)
 	_camera_z = lerpf(_camera_z, target_z, 3.0 * delta)
 	camera.position.z = _camera_z
 

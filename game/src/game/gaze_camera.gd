@@ -13,8 +13,14 @@ extends Camera3D
 ## Grados de zona muerta: por debajo no se mueve, así no tiembla quieto.
 @export var dead_zone := 0.5
 ## Cuánto gira la cabeza como máximo sin empezar el giro completo.
-@export var max_yaw := 38.0
-@export var max_pitch := 22.0
+@export var max_yaw := 25.0
+## Límite hacia arriba (positivo) y hacia abajo (negativo). La webcam suele
+## estar arriba de la pantalla, así que se permite más arriba que abajo.
+@export var max_pitch_up := 30.0
+@export var max_pitch_down := 12.0
+## Desplaza el centro hacia arriba: compensa que la cámara esté arriba y la
+## mirada natural caiga hacia abajo. Hace que mirar arriba sea más fácil.
+@export var pitch_bias := 12.0
 ## Escapes por si la cámara quedara al revés en tu setup.
 @export var invert_x := false
 @export var invert_y := false
@@ -22,10 +28,13 @@ extends Camera3D
 @export var smoothing := 15.0
 
 @export_group("Giro completo")
+## El giro de 360° por sostener la mirada en el borde. En un juego tipo FNAF
+## no tiene sentido, así que por defecto está apagado.
+@export var edge_turn_enabled := false
 ## Grados de cabeza a partir de los cuales la cabeza sigue girando.
-@export var edge_threshold := 15.0
+@export var edge_threshold := 25.0
 ## Segundos que hay que sostenerlo para que arranque el giro.
-@export var edge_delay := 0.3
+@export var edge_delay := 0.8
 @export var edge_speed := 90.0
 ## Grados extra de cabeza que hacen falta para llegar a la velocidad máxima.
 @export var edge_ramp := 12.0
@@ -60,8 +69,14 @@ func follow(head: Vector2, can_look: bool, can_turn: bool, delta: float) -> void
 		# imagen, que es justo lo que hace falta para apuntar fino.
 		var precision := lerpf(1.0, zoom_fov / base_fov, zoom_level)
 		yaw_target = clampf(_beyond_dead_zone(hx) * gain * precision, -max_yaw, max_yaw)
-		pitch_target = clampf(_beyond_dead_zone(hy) * gain * precision, -max_pitch, max_pitch)
-		_turn_if_edge(hx, can_turn and zoom_level < 0.2, delta)
+		# El bias sube el centro para compensar que la webcam esta arriba y la
+		# mirada natural cae hacia abajo. Hace que mirar arriba sea mas facil.
+		var pitched := _beyond_dead_zone(hy) * gain * precision + pitch_bias
+		pitch_target = clampf(pitched, -max_pitch_down, max_pitch_up)
+		if edge_turn_enabled:
+			_turn_if_edge(hx, can_turn and zoom_level < 0.2, delta)
+		else:
+			_edge_time = 0.0
 	else:
 		_edge_time = maxf(_edge_time - 2.0 * delta, 0.0)
 
