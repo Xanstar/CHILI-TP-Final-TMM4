@@ -13,7 +13,7 @@ extends Camera3D
 ## Grados de zona muerta: por debajo no se mueve, así no tiembla quieto.
 @export var dead_zone := 0.5
 ## Cuánto gira la cabeza como máximo sin empezar el giro completo.
-@export var max_yaw := 60.0
+@export var max_yaw := 180.0
 ## Límite hacia arriba (positivo) y hacia abajo (negativo). La webcam suele
 ## estar arriba de la pantalla, así que se permite más arriba que abajo.
 @export var max_pitch_up := 35.0

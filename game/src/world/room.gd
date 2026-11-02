@@ -111,9 +111,9 @@ func _build_bathroom() -> void:
 		push_warning("Room: no pude cargar el baño")
 		return
 	var bathroom := scene.instantiate()
-	# Posicionar el baño para que la puerta quede frente al jugador.
-	# La puerta está en el origen del GLB; el baño se extiende en +X y +Z.
+	# Rotar 180 para que la puerta quede frente al jugador.
 	bathroom.scale = Vector3.ONE * 1.0
+	bathroom.rotation_degrees.y = 180.0
 	bathroom.position = Vector3(0, -0.5, 0)
 	add_child(bathroom)
 	# Luces tenues para ambiente de terror.
