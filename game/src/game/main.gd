@@ -33,19 +33,15 @@ const REMEDIES := [
 	},
 ]
 
-const CHILI_YAW := 0.0
-const CHILI_DISTANCE := 2.6
-const DOOR_YAW := 144.0
-const DOOR_DISTANCE := 9.0
+const DOOR_YAW := 0.0
+const DOOR_DISTANCE := 3.0
 const ENDING_DELAY := 10.0
-## El frasco vive sobre una repisa, así que necesita mueble.
-const SHELF_REMEDY := 1
 
 const ENDINGS := {
 	&"contemplacion": "Te ves reflejado en la pantalla apagada.\n\nYa no sos el que vino a cazar monstruos.",
-	&"abandono": "Saliste.\n\nCHILI te sigue, arrastrándose.",
+	&"oscuridad": "Las luces se apagaron.\n\nCHILI está adentro.\n\nYa es tarde.",
 	&"perdida": "Mientras mirabas para otro lado,\nCHILI dejó de moverse.",
-	&"ayuda": "CHILI respira.\n\nTus patas ya no son las mismas.",
+	&"escape": "Saliste.\n\nCHILI te sigue, arrastrándose.",
 }
 
 @export_group("Mirada")
@@ -70,8 +66,17 @@ const ENDINGS := {
 @export var cure_per_delivery := 0.25
 
 @export_group("Puerta")
-## Segundos mirando la puerta para irse.
-@export var door_hold := 4.0
+## Segundos que se puede mantener la puerta cerrada antes del apagón.
+@export var door_energy_drain := 0.08
+## Segundos de oscuridad antes de que CHILI infecte.
+@export var blackout_duration := 3.0
+## Segundos que tarda CHILI en aparecer en la puerta.
+@export var chili_appear_min := 8.0
+@export var chili_appear_max := 15.0
+## Segundos que CHILI se queda en la puerta si está abierta.
+@export var chili_stay_open := 6.0
+## Segundos que CHILI se queda si la puerta está cerrada (bloqueado).
+@export var chili_stay_closed := 4.0
 
 @export_group("Escena")
 @export var show_debug_hud := false
@@ -103,6 +108,23 @@ var targeted_remedy: Pickup = null
 ## Cuánto se acercó CHILI a tu espacio (0 = en su lugar, 1 = encima tuyo).
 var _creep := 0.0
 
+# --- puerta y energía ---
+var door_closed := false
+var energy := 1.0
+var lights_on := true
+var _door_toggle_cooldown := 0.0
+
+# --- CHILI en la puerta ---
+var chili_at_door := false
+var chili_inside := false
+var _chili_appear_timer := 0.0
+var _chili_stay_timer := 0.0
+var _chili_next_appear := 10.0
+
+# --- apagón ---
+var _blackout_timer := 0.0
+var _blackout_active := false
+
 var _last_remedy: Pickup = null
 var _time_without_remedy := 100.0
 var _time_without_chili := 100.0
@@ -119,8 +141,6 @@ var _head_offset := Vector2.ZERO
 func _ready() -> void:
 	_build_layout()
 	room.build(_clear_zones())
-	var shelf := REMEDIES[SHELF_REMEDY]
-	room.add_shelf(Shapes.polar(shelf["yaw"], shelf["distance"], 0.0), shelf["yaw"])
 	chili.build()
 	door.build()
 	kaiser.build()
@@ -130,6 +150,10 @@ func _ready() -> void:
 
 	EyeInput.grab.connect(_on_grab)
 	EyeInput.source_changed.connect(_on_source_changed)
+
+	# CHILI empieza fuera del baño.
+	chili.visible = false
+	_chili_next_appear = randf_range(chili_appear_min, chili_appear_max)
 
 	# Arranque sin Enter: solo para pruebas headless y para grabar la demo.
 	if Cli.has_flag("--auto"):
@@ -147,6 +171,7 @@ func _process(delta: float) -> void:
 		_update_rules(delta)
 	_update_views(delta)
 	_update_hud()
+	_update_door_toggle(delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -207,14 +232,56 @@ func _on_grab() -> void:
 #  REGLAS
 # ============================================================
 
+func _update_door_toggle(delta: float) -> void:
+	_door_toggle_cooldown = maxf(_door_toggle_cooldown - delta, 0.0)
+	if _door_toggle_cooldown > 0.0:
+		return
+	var looking_at_door := _angle_to(door, Vector3(0, 1.8, 0)) < focus_angle
+	if not looking_at_door or not EyeInput.hand:
+		return
+	if EyeInput.gesture == "Closed_Fist" and not door_closed:
+		door_closed = true
+		door.set_closed(true)
+		_door_toggle_cooldown = 0.5
+		_notify("Puerta cerrada")
+	elif EyeInput.gesture == "Open_Palm" and door_closed:
+		door_closed = false
+		door.set_closed(false)
+		_door_toggle_cooldown = 0.5
+		_notify("Puerta abierta")
+
+
+func _set_lights(on: bool) -> void:
+	# Oscurecer el ambiente.
+	var env := (get_node_or_null("Room") as Room)
+	if env != null:
+		# Buscar el WorldEnvironment.
+		for child in env.get_children():
+			if child is WorldEnvironment:
+				var we := child as WorldEnvironment
+				if we.environment != null:
+					we.environment.ambient_light_energy = 0.7 if on else 0.02
+					we.environment.fog_density = 0.03 if on else 0.15
+	# Apagar/encender las luces OmniLight.
+	for node in get_tree().get_nodes_in_group("lights"):
+		if node is OmniLight3D:
+			(node as OmniLight3D).light_energy = (node as OmniLight3D).light_energy if on else 0.0
+	# Buscar luces en la escena.
+	for child in get_children():
+		_toggle_lights_recursive(child, on)
+
+
+func _toggle_lights_recursive(node: Node, on: bool) -> void:
+	if node is OmniLight3D:
+		(node as OmniLight3D).visible = on
+	for child in node.get_children():
+		_toggle_lights_recursive(child, on)
+
+
 func _update_camera(delta: float) -> void:
 	var obstructed := EyeInput.hand_obstructs() or (
 		EyeInput.uses_camera() and EyeInput.zoom_hand)
-	# Cerrar los ojos ya no frena la cabeza: la pose se lee igual de bien y al
-	# abrirlos otra vez no hay salto. Los ojos cerrados son otra mecánica.
 	var can_look := EyeInput.tracking and not obstructed
-	# Girar sobre sí mismo es más exigente: con una mano cerca de la cara la
-	# lectura de los bordes se vuelve falsa y la cabeza se iría sola.
 	var can_turn := can_look \
 		and not (EyeInput.uses_camera() and EyeInput.hand and carried == null)
 	camera.follow(EyeInput.head - _head_offset, can_look, can_turn, delta)
@@ -223,105 +290,62 @@ func _update_camera(delta: float) -> void:
 func _update_rules(delta: float) -> void:
 	var eyes_closed := EyeInput.eyes_closed_time > eyes_closed_delay and not EyeInput.hand
 
-	# 1. Qué remedio está mirando. Con la palma abierta la elección queda fija,
-	#    así no se pierde mientras levanta la mano.
-	var holding_choice := EyeInput.hand and EyeInput.palm_ready and carried == null
-	if eyes_closed or carried != null:
-		looked_remedy = null
-	elif holding_choice:
-		looked_remedy = _first_available(looked_remedy)
-	else:
-		looked_remedy = _remedy_in_sight()
-		if looked_remedy != null:
-			_last_remedy = looked_remedy
-			_time_without_remedy = 0.0
-	_time_without_remedy += delta
+	# 1. CHILI aparece en la puerta periódicamente.
+	_chili_appear_timer += delta
+	if not chili_at_door and not chili_inside and _chili_appear_timer >= _chili_next_appear:
+		chili_at_door = true
+		chili.visible = true
+		# Colocar CHILI justo afuera de la puerta.
+		chili.position = door.position + Vector3(0, 0, -0.5)
+		chili.rotation_degrees.y = 180.0
+		_chili_stay_timer = 0.0
+		_chili_appear_timer = 0.0
 
-	# Objetivo de lock-on: el remedio más cercano dentro de un rango amplio.
-	# No hace falta mirarlo de frente para que se marque como objetivo.
-	targeted_remedy = _closest_remedy(20.0)
+	if chili_at_door:
+		_chili_stay_timer += delta
+		var stay_time := chili_stay_open if not door_closed else chili_stay_closed
+		if _chili_stay_timer >= stay_time:
+			chili_at_door = false
+			chili.visible = false
+			_chili_next_appear = randf_range(chili_appear_min, chili_appear_max)
 
-	# 2. Qué está mirando en general.
-	var new_focus := Focus.OTHER
-	if not EyeInput.tracking:
-		new_focus = Focus.NO_SIGNAL
-	elif eyes_closed:
-		new_focus = Focus.EYES_CLOSED
-	elif looked_remedy != null:
-		new_focus = Focus.ITEM
-	elif _angle_to(door, Vector3(0, 1.8, 0)) < focus_angle:
-		new_focus = Focus.DOOR
-	elif _angle_to(chili, Vector3(0, 0.4, 0)) < focus_angle:
-		new_focus = Focus.CHILI
-	if new_focus != focus:
-		focus = new_focus
-		print("[Main] foco: ", Focus.keys()[focus])
-
-	_time_without_chili += delta
-	if focus == Focus.CHILI:
-		_time_without_chili = 0.0
-
-	# 3. El mundo no espera: CHILI empeora solo, el doble si cierra los ojos.
-	gravity += gravity_rate * (2.0 if focus == Focus.EYES_CLOSED else 1.0) * delta
-	gravity = minf(gravity, 1.0)
-
-	# 3b. CHILI se acerca si no lo mirás o si cerrás los ojos: FNAF.
-	var creeping := focus != Focus.CHILI or focus == Focus.EYES_CLOSED
-	if creeping:
-		_creep = move_toward(_creep, 1.0, 0.015 * delta)
-	else:
-		_creep = move_toward(_creep, 0.0, 0.03 * delta)
-	if delivered > 0:
-		_creep = move_toward(_creep, 0.0, 0.05 * delta)
-	_creep = clampf(_creep, 0.0, 1.0)
-
-	# Si CHILI se acercó mucho y no lo mirás, el contagio sube rápido.
-	if _creep > 0.8 and focus != Focus.CHILI:
+	# 2. Si la puerta está abierta y CHILI está en la puerta → contagio.
+	if chili_at_door and not door_closed:
 		contagion += contagion_rate * 2.0 * delta
 		contagion = minf(contagion, 1.0)
 
-	# 4. Mirarlo fascina... y contagia. Apartar la vista frena el contagio.
-	if focus == Focus.CHILI:
-		fascination = move_toward(fascination, 1.0, 0.35 * delta)
-		contagion += contagion_rate * (0.3 + 0.7 * fascination) \
-			* (1.0 + zoom * contagion_zoom_bonus) * delta
+	# 3. Energía: se drena cuando la puerta está cerrada.
+	if door_closed:
+		energy -= door_energy_drain * delta
+		energy = maxf(energy, 0.0)
 	else:
-		fascination = move_toward(fascination, 0.0, 0.8 * delta)
+		energy = move_toward(energy, 1.0, 0.05 * delta)
 
-	# 5. Abrir la mano con algo: si miraba a CHILI se lo entrega, si no lo deja.
-	if carried != null and EyeInput.hand and EyeInput.palm_ready \
-			and (_time - _grabbed_at) > 0.4:
-		if focus == Focus.CHILI or _time_without_chili < chili_memory:
-			_deliver()
-		else:
-			_drop()
+	# 4. Apagón: si la energía llega a 0 con la puerta cerrada.
+	if energy <= 0.0 and door_closed and not _blackout_active:
+		_blackout_active = true
+		_blackout_timer = blackout_duration
+		lights_on = false
+		_set_lights(false)
 
-	# 6. Irse: sostener la mirada en la puerta. CHILI lo sigue.
-	if focus == Focus.DOOR:
-		_door_time += delta
-		chase = move_toward(chase, 1.0, delta / door_hold)
-	else:
-		_door_time = maxf(_door_time - 2.0 * delta, 0.0)
-		chase = move_toward(chase, 0.0, 0.1 * delta)
+	if _blackout_active:
+		_blackout_timer -= delta
+		if _blackout_timer <= 0.0:
+			_blackout_active = false
+			lights_on = true
+			_set_lights(true)
+			# CHILI se metió adentro → infección instantánea → game over.
+			chili_inside = true
+			chili.visible = true
+			chili.position = camera.position + Vector3(0, -0.3, -1.0)
+			contagion = 1.0
+			_end(&"oscuridad")
 
-	# 7. Tentación: CHILI llama la atención cada vez más seguido.
-	_bait_at -= delta
-	if _bait_at <= 0.0:
-		_bait = 1.0
-		_bait_at = randf_range(1.0, 2.5) * (1.4 - gravity * 0.6)
-	_bait = move_toward(_bait, 0.0, 3.0 * delta)
-	_flash = move_toward(_flash, 0.0, 1.5 * delta)
-
-	# 8. Finales.
-	if contagion >= 1.0:
+	# 5. Finales.
+	if contagion >= 1.0 and not finished:
 		_end(&"contemplacion")
-	elif gravity >= 1.0:
+	if gravity >= 1.0 and not finished:
 		_end(&"perdida")
-	elif delivered >= remedies.size():
-		_end(&"ayuda")
-	elif _door_time >= door_hold:
-		_end(&"abandono")
-
 
 func _deliver() -> void:
 	carried.deliver()
@@ -353,13 +377,6 @@ func _end(kind: StringName) -> void:
 func _update_views(delta: float) -> void:
 	chili.gravity = gravity
 	chili.apply(delta, _bait, _flash)
-	# CHILI se acerca cuando no lo mirás (solo si no está yendo a la puerta).
-	if chase < 0.1:
-		var base_pos := chili.base_position
-		var toward := camera.global_position + Vector3(0, -0.3, 0)
-		chili.position = base_pos.lerp(toward, _creep * 0.7)
-	chili.pull_towards(door.position, chase, delta)
-
 	camera.set_zoom(EyeInput.zoom_hand and EyeInput.zoom_gesture == "Open_Palm",
 		fascination, delta)
 	zoom = camera.zoom_level
@@ -378,23 +395,26 @@ func _update_views(delta: float) -> void:
 	# El párpado sigue al parpadeo, no a la mecánica: se cierra de verdad.
 	hud.set_eyelids(EyeInput.blink)
 	hud.set_status(_status_text())
+	hud.set_target(_target_text())
 
-	# Objetivo de lock-on: qué remedio está en la mira.
-	var target_text := ""
-	if running and not finished and carried == null and targeted_remedy != null:
-		target_text = targeted_remedy.item_name
-		if looked_remedy == targeted_remedy:
-			target_text += "  —  " + ("agarrable" if EyeInput.palm_ready else "miralo")
-	elif running and not finished and carried != null:
-		if focus == Focus.CHILI or _time_without_chili < chili_memory:
-			target_text = "dárselo a CHILI — abrí la mano"
-		else:
-			target_text = "mirá a CHILI para dárselo"
-	hud.set_target(target_text)
+	# Puerta: visual de abierta/cerrada.
+	door.set_closed(door_closed)
 
-	for remedy in remedies:
-		remedy.set_highlight(_highlight_for(remedy))
-	door.set_urgency(_door_time / door_hold)
+	# Luces.
+	if _blackout_active:
+		_set_lights(false)
+	elif lights_on:
+		_set_lights(true)
+
+	# Tentación.
+	_bait_at -= delta
+	if _bait_at <= 0.0:
+		_bait = 1.0
+		_bait_at = randf_range(1.0, 2.5) * (1.4 - gravity * 0.6)
+	_bait = move_toward(_bait, 0.0, 3.0 * delta)
+	_flash = move_toward(_flash, 0.0, 1.5 * delta)
+
+	chili.apply(delta, _bait, _flash)
 
 
 func _highlight_for(remedy: Pickup) -> float:
@@ -420,10 +440,45 @@ func _status_text() -> String:
 		return "mirá al frente — arranca solo"
 	if not EyeInput.tracking:
 		return "sin cámara — el juego sigue con la última pose"
+	if _blackout_active:
+		return "APAGÓN"
 	if EyeInput.eyes_closed_time > eyes_closed_delay:
 		return "ojos cerrados"
 	if _creep > 0.7:
 		return "CHILI se acerca..."
+	if chili_at_door and not door_closed:
+		return "CHILI está en la puerta"
+	return ""
+
+
+func _target_text() -> String:
+	if not running or finished:
+		return ""
+	if door_closed:
+		return "puerta cerrada"
+	var looking_at_door := _angle_to(door, Vector3(0, 1.8, 0)) < focus_angle
+	if looking_at_door:
+		if door_closed:
+			return "puerta cerrada — puño para abrir"
+		else:
+			return "puerta abierta — puño para cerrar"
+	return ""
+	if finished or EyeInput.hand:
+		return ""
+	if not running:
+		if not EyeInput.tracking:
+			return "sin cámara — acercate al centro"
+		return "mirá al frente — arranca solo"
+	if not EyeInput.tracking:
+		return "sin cámara — el juego sigue con la última pose"
+	if EyeInput.eyes_closed_time > eyes_closed_delay:
+		return "ojos cerrados"
+	if _blackout_active:
+		return "APAGÓN"
+	if _creep > 0.7:
+		return "CHILI se acerca..."
+	if chili_at_door and not door_closed:
+		return "CHILI está en la puerta"
 	return ""
 
 
@@ -462,7 +517,7 @@ gravedad CHILI: %.2f   entregados: %d/%d   en la mano: %s
 # ============================================================
 
 func _build_layout() -> void:
-	chili.position = Shapes.polar(CHILI_YAW, CHILI_DISTANCE, 0.0)
+	chili.visible = false
 	door.position = Shapes.polar(DOOR_YAW, DOOR_DISTANCE, 0.0)
 	door.rotation_degrees.y = DOOR_YAW
 
@@ -483,7 +538,6 @@ func _clear_zones() -> Array[Vector3]:
 	var zones: Array[Vector3] = []
 	for data in REMEDIES:
 		zones.append(Vector3(data["yaw"], data["distance"], 8.0))
-	zones.append(Vector3(CHILI_YAW, 99.0, 12.0))
 	zones.append(Vector3(DOOR_YAW, 99.0, 12.0))
 	return zones
 

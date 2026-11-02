@@ -4,6 +4,7 @@ extends Node3D
 ## es la única pista de que irse es una opción.
 
 var _panel: StandardMaterial3D
+var _closed := false
 
 
 func build() -> void:
@@ -18,6 +19,15 @@ func build() -> void:
 	Shapes.add_light(self, Vector3(0, 1.1, 0.8), Color(1.0, 0.8, 0.5), 1.5, 5.0)
 
 
-## [param urgency] va de 0 (nadie la mira) a 1 (irse).
-func set_urgency(urgency: float) -> void:
-	_panel.emission_energy_multiplier = 0.6 + urgency * 2.0
+## Cierra o abre la puerta. Cuando está cerrada, el panel se pone rojo/oscuro.
+func set_closed(closed: bool) -> void:
+	_closed = closed
+	if _panel != null:
+		if closed:
+			_panel.albedo_color = Color(0.15, 0.08, 0.08)
+			_panel.emission = Color(0.8, 0.2, 0.1)
+			_panel.emission_energy_multiplier = 1.5
+		else:
+			_panel.albedo_color = Color(0.2, 0.17, 0.12)
+			_panel.emission = Color(1.0, 0.8, 0.5)
+			_panel.emission_energy_multiplier = 0.6
