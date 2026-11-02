@@ -1,0 +1,32 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/game/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://src/world/room.gd" id="2_room"]
+[ext_resource type="Script" path="res://src/world/chili.gd" id="3_chili"]
+[ext_resource type="Script" path="res://src/world/door.gd" id="4_door"]
+[ext_resource type="Script" path="res://src/game/gaze_camera.gd" id="5_camera"]
+[ext_resource type="Script" path="res://src/world/kaiser_body.gd" id="6_kaiser"]
+[ext_resource type="Script" path="res://src/ui/hud.gd" id="7_hud"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="Room" type="Node3D" parent="."]
+script = ExtResource("2_room")
+
+[node name="Chili" type="Node3D" parent="."]
+script = ExtResource("3_chili")
+
+[node name="Door" type="Node3D" parent="."]
+script = ExtResource("4_door")
+
+[node name="Camera" type="Camera3D" parent="."]
+position = Vector3(0, 0.65, 0)
+current = true
+script = ExtResource("5_camera")
+
+[node name="Kaiser" type="Node3D" parent="Camera"]
+script = ExtResource("6_kaiser")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+script = ExtResource("7_hud")
