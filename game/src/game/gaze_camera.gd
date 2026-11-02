@@ -9,15 +9,15 @@ extends Camera3D
 
 @export_group("Sensibilidad")
 ## Multiplicador del giro. 1.0 = uno a uno con la cabeza. Más alto = menos cuello.
-@export var gain := 1.5
+@export var gain := 2.0
 ## Grados de zona muerta: por debajo no se mueve, así no tiembla quieto.
-@export var dead_zone := 0.5
+@export var dead_zone := 0.3
 ## Cuánto gira la cabeza como máximo sin empezar el giro completo.
 @export var max_yaw := 180.0
 ## Límite hacia arriba (positivo) y hacia abajo (negativo). La webcam suele
 ## estar arriba de la pantalla, así que se permite más arriba que abajo.
-@export var max_pitch_up := 35.0
-@export var max_pitch_down := 45.0
+@export var max_pitch_up := 45.0
+@export var max_pitch_down := 25.0
 ## Desplaza el centro hacia arriba: compensa que la cámara esté arriba y la
 ## mirada natural caiga hacia abajo. Hace que mirar arriba sea más fácil.
 @export var pitch_bias := 12.0
@@ -25,19 +25,19 @@ extends Camera3D
 @export var invert_x := false
 @export var invert_y := false
 ## Suavizado del movimiento (más alto, más seco).
-@export var smoothing := 15.0
+@export var smoothing := 12.0
 
 @export_group("Giro completo")
-## El giro de 360° por sostener la mirada en el borde. En un juego tipo FNAF
-## no tiene sentido, así que por defecto está apagado.
-@export var edge_turn_enabled := false
+## El giro de 360° por sostener la mirada en el borde. Necesario para ver
+## lo que está atrás sin torcer el cuello.
+@export var edge_turn_enabled := true
 ## Grados de cabeza a partir de los cuales la cabeza sigue girando.
-@export var edge_threshold := 25.0
+@export var edge_threshold := 20.0
 ## Segundos que hay que sostenerlo para que arranque el giro.
-@export var edge_delay := 0.8
-@export var edge_speed := 90.0
+@export var edge_delay := 0.4
+@export var edge_speed := 120.0
 ## Grados extra de cabeza que hacen falta para llegar a la velocidad máxima.
-@export var edge_ramp := 12.0
+@export var edge_ramp := 15.0
 
 @export_group("Zoom")
 @export var base_fov := 75.0
