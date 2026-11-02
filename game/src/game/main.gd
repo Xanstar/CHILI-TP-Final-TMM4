@@ -406,8 +406,7 @@ func _update_views(delta: float) -> void:
 	zoom = camera.zoom_level
 
 	# El personaje es estático: no se mueve con la mano.
-	# (Futuro: mirar un objeto + puño = moverse hacia él.)
-	camera.position.z = 1.5
+	camera.position.z = 0.0
 
 	kaiser.apply(delta, contagion, EyeInput.hand, EyeInput.gesture == "Closed_Fist")
 
