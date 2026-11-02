@@ -58,9 +58,9 @@ func _build_bathroom() -> void:
 		push_warning("Room: no pude cargar el baño")
 		return
 	var bathroom := scene.instantiate()
-	# Escalar y posicionar para que quepa en el espacio de juego.
-	bathroom.scale = Vector3.ONE * 1.2
-	bathroom.position = Vector3(0, -0.5, -2.0)
+	# Centrar el baño en el jugador para que esté adentro.
+	bathroom.scale = Vector3.ONE * 1.0
+	bathroom.position = Vector3(0, -0.5, 0)
 	add_child(bathroom)
 	# Luces tenues para ambiente de terror.
 	Shapes.add_light(self, Vector3(0, 3.0, 0), Color(0.8, 0.75, 0.6), 1.5, 12.0)

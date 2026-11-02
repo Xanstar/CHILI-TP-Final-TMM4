@@ -34,7 +34,7 @@ const REMEDIES := [
 ]
 
 const DOOR_YAW := 0.0
-const DOOR_DISTANCE := 3.0
+const DOOR_DISTANCE := 2.0
 const ENDING_DELAY := 10.0
 
 const ENDINGS := {
@@ -236,7 +236,7 @@ func _update_door_toggle(delta: float) -> void:
 	_door_toggle_cooldown = maxf(_door_toggle_cooldown - delta, 0.0)
 	if _door_toggle_cooldown > 0.0:
 		return
-	var looking_at_door := _angle_to(door, Vector3(0, 1.8, 0)) < focus_angle
+	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 25.0
 	if not looking_at_door or not EyeInput.hand:
 		return
 	if EyeInput.gesture == "Closed_Fist" and not door_closed:
@@ -296,7 +296,7 @@ func _update_rules(delta: float) -> void:
 		chili_at_door = true
 		chili.visible = true
 		# Colocar CHILI justo afuera de la puerta.
-		chili.position = door.position + Vector3(0, 0, -0.5)
+		chili.position = door.position + Vector3(0, 0, -1.5)
 		chili.rotation_degrees.y = 180.0
 		_chili_stay_timer = 0.0
 		_chili_appear_timer = 0.0
@@ -456,7 +456,7 @@ func _target_text() -> String:
 		return ""
 	if door_closed:
 		return "puerta cerrada"
-	var looking_at_door := _angle_to(door, Vector3(0, 1.8, 0)) < focus_angle
+	var looking_at_door := _angle_to(door, Vector3(0, 1.0, 0)) < 25.0
 	if looking_at_door:
 		if door_closed:
 			return "puerta cerrada — puño para abrir"
