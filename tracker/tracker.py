@@ -33,7 +33,8 @@ import numpy as np
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
-from pose import head_pose
+from pose import (EYE_CORNER_A, EYE_CORNER_B, LEFT_EYE, NOSE_TIP,
+                  RIGHT_EYE, ear_to_blink, eye_aspect_ratio, head_pose)
 
 MODELS = Path(__file__).parent / "models"
 
@@ -69,7 +70,6 @@ class Tracker:
             vision.FaceLandmarkerOptions(
                 base_options=mp_python.BaseOptions(model_asset_path=str(FACE_MODEL)),
                 running_mode=vision.RunningMode.VIDEO,
-                output_face_blendshapes=True,
                 num_faces=1,
             )
         )
@@ -78,6 +78,9 @@ class Tracker:
                 base_options=mp_python.BaseOptions(model_asset_path=str(HAND_MODEL)),
                 running_mode=vision.RunningMode.VIDEO,
                 num_hands=2,
+                min_hand_detection_confidence=0.3,
+                min_hand_presence_confidence=0.3,
+                min_tracking_confidence=0.3,
             )
         )
 
@@ -139,7 +142,7 @@ class Tracker:
         image = mp.Image(image_format=mp.ImageFormat.SRGB,
                          data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         result = self._face.detect_for_video(image, timestamp)
-        if not result.face_landmarks or not result.face_blendshapes:
+        if not result.face_landmarks:
             return None
 
         landmarks = result.face_landmarks[0]
@@ -148,12 +151,15 @@ class Tracker:
         if angles is None:
             return None
 
-        shapes = {s.category_name: s.score for s in result.face_blendshapes[0]}
+        # Parpadeo por Eye Aspect Ratio: no depende de la forma del ojo, asi
+        # que funciona con ojos pequenos (asiaticos) que los blendshapes leen
+        # como cerrados.
+        blink_l = ear_to_blink(eye_aspect_ratio(landmarks, LEFT_EYE))
+        blink_r = ear_to_blink(eye_aspect_ratio(landmarks, RIGHT_EYE))
+
         face = {
-            # 0 = abierto, 1 = cerrado. Se manda cada ojo por separado: el
-            # juego decide que un parpadeo rapido no es "ojos cerrados".
-            "blink_l": shapes["eyeBlinkLeft"],
-            "blink_r": shapes["eyeBlinkRight"],
+            "blink_l": blink_l,
+            "blink_r": blink_r,
             **angles,
         }
         self._last_face = face
@@ -172,15 +178,21 @@ class Tracker:
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=mirrored)
         result = self._hands.recognize_for_video(image, timestamp)
 
-        for i, _landmarks in enumerate(result.hand_landmarks):
-            side = "Right"
-            if i < len(result.handedness) and result.handedness[i]:
-                side = result.handedness[i][0].category_name
+        for i, landmarks in enumerate(result.hand_landmarks):
             gesture = "None"
             if i < len(result.gestures) and result.gestures[i]:
                 gesture = result.gestures[i][0].category_name
 
-            is_right = side == "Right"
+            # Si el reconocedor no clasifica, se intenta por la geometria de los
+            # dedos: puntas arriba de las articulaciones = palma abierta.
+            if gesture == "None":
+                gesture = _classify_hand(landmarks)
+
+            # MediaPipe adivina la mano, y se equivoca seguido. La posicion en la
+            # imagen es mas confiable: despues de espejar, la mano derecha del
+            # jugador queda a la derecha del cuadro.
+            center_x = sum(lm.x for lm in landmarks) / len(landmarks)
+            is_right = center_x > 0.5
             if self.config.mirror_hands:
                 is_right = not is_right
 
@@ -193,6 +205,28 @@ class Tracker:
 
         self._last_hands = state
         return state
+
+
+def _classify_hand(landmarks) -> str:
+    """Clasifica la mano por la geometria de los dedos cuando MediaPipe no la reconoce.
+
+    Cuenta cuantos dedos estan estirados (punta por encima de la articulacion).
+    4 o mas = palma abierta, 0 o 1 = puno cerrado.
+    """
+    # Indices: (punta, articulacion PIP) para indice, medio, anular, menique.
+    fingers = [(8, 6), (12, 10), (16, 14), (20, 18)]
+    extended = 0
+    for tip_idx, pip_idx in fingers:
+        if landmarks[tip_idx].y < landmarks[pip_idx].y:
+            extended += 1
+    # Pulgar: se estira hacia el lado, no hacia arriba.
+    if abs(landmarks[4].x - landmarks[3].x) > 0.04:
+        extended += 1
+    if extended >= 4:
+        return "Open_Palm"
+    if extended <= 1:
+        return "Closed_Fist"
+    return "None"
 
 
 class FakeSource:

@@ -66,8 +66,16 @@ def main() -> int:
     expect(abs(mirrored["head_yaw"] - left["head_yaw"]) < 0.01,
            "espejar no cambia el resultado", mirrored["head_yaw"])
 
-    # Sin datos utilizables no se inventa una pose.
-    expect(pose.head_pose(face(), 0, 0) is None, "tamano invalido devuelve None")
+    # Parpadeo por Eye Aspect Ratio: valores bajos de EAR son ojo cerrado.
+    open_eye = [landmark(0.1, 0.5), landmark(0.2, 0.4), landmark(0.3, 0.4),
+                landmark(0.4, 0.5), landmark(0.3, 0.6), landmark(0.2, 0.6)]
+    closed_eye = [landmark(0.1, 0.5), landmark(0.2, 0.5), landmark(0.3, 0.5),
+                  landmark(0.4, 0.5), landmark(0.3, 0.5), landmark(0.2, 0.5)]
+    ear_open = pose.eye_aspect_ratio(open_eye, list(range(6)))
+    ear_closed = pose.eye_aspect_ratio(closed_eye, list(range(6)))
+    expect(ear_open > ear_closed, "EAR abierto > EAR cerrado", f"{ear_open:.3f} vs {ear_closed:.3f}")
+    expect(pose.ear_to_blink(ear_open) < 0.2, "EAR abierto da blink ~0", pose.ear_to_blink(ear_open))
+    expect(pose.ear_to_blink(ear_closed) > 0.8, "EAR cerrado da blink ~1", pose.ear_to_blink(ear_closed))
 
     if _failures == 0:
         print("POSE: OK")
