@@ -66,6 +66,20 @@ En Windows hay dos atajos que hacen todo:
 - `run-game.bat` — abre el tracker y el juego.
 - `open-editor.bat` — abre solo el editor de Godot.
 
+### Si algo no abre
+
+Doble click sobre `game/project.godot` **no** funciona: Windows no sabe con qué
+programa abrirlo salvo que hayas instalado Godot con instalador. Usá
+`open-editor.bat`, o esta línea con las rutas completas:
+
+```bat
+set GODOT=%LOCALAPPDATA%\Programs\Godot\Godot_v4.6.3-stable_win64.exe
+"%GODOT%" --editor --path game
+```
+
+`run-game.bat` avisa si falta Python, `mediapipe` o Godot en lugar de cerrarse
+sin decir nada.
+
 ### Controles
 
 | Acción | Con cámara | Con mouse |
