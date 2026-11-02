@@ -132,6 +132,7 @@ var _door_time := 0.0
 var _bait := 0.0
 var _bait_at := 2.0
 var _flash := 0.0
+var _p_pressed := false
 var _time := 0.0
 ## Pose de la cabeza con la que se calibró, en grados.
 var _head_offset := Vector2.ZERO
@@ -174,6 +175,13 @@ func _process(delta: float) -> void:
 	_update_views(delta)
 	_update_hud()
 	_update_door_toggle(delta)
+	_update_movement(delta)
+	# Tecla P: imprimir posicion actual (con cooldown para no spamear).
+	if Input.is_key_pressed(KEY_P) and not _p_pressed:
+		_p_pressed = true
+		print("[POS] player:", camera.global_position, "door:", room.glb_door.global_position if room.glb_door else "null", "chili:", chili.global_position if chili.visible else "hidden")
+	if not Input.is_key_pressed(KEY_P):
+		_p_pressed = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -392,6 +400,35 @@ func _end(kind: StringName) -> void:
 	print("[Main] FINAL: ", kind)
 	await get_tree().create_timer(ENDING_DELAY).timeout
 	get_tree().reload_current_scene()
+
+
+# ============================================================
+#  MOVIMIENTO WASD (temporal, para calibrar posiciones)
+# ============================================================
+
+var _move_speed := 3.0
+
+func _update_movement(delta: float) -> void:
+	var input := Vector3.ZERO
+	if Input.is_key_pressed(KEY_W):
+		input.z -= 1.0
+	if Input.is_key_pressed(KEY_S):
+		input.z += 1.0
+	if Input.is_key_pressed(KEY_A):
+		input.x -= 1.0
+	if Input.is_key_pressed(KEY_D):
+		input.x += 1.0
+	if input.length() > 0.0:
+		input = input.normalized()
+		var forward := -camera.global_transform.basis.z
+		forward.y = 0.0
+		forward = forward.normalized()
+		var right := camera.global_transform.basis.x
+		right.y = 0.0
+		right = right.normalized()
+		var movement := (forward * -input.z + right * input.x) * _move_speed * delta
+		camera.position += movement
+		camera.position.y = 0.65
 
 
 # ============================================================
