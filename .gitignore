@@ -1,8 +1,17 @@
+# Godot
+.godot/
+exports/
+*.translation
+
+# Binarios locales (Godot portable, caches)
+tools/
+
 # Python
+.venv/
 venv/
 __pycache__/
 *.pyc
 
-# Godot
-.godot/
-/android/
+# Sistema
+Thumbs.db
+desktop.ini
