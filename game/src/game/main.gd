@@ -93,6 +93,8 @@ var gravity := 0.35
 var contagion := 0.0
 var fascination := 0.0
 var zoom := 0.0
+## Posición Z de la cámara: la mano izquierda la mueve adelante/atrás.
+var _camera_z := 0.0
 var chase := 0.0
 var delivered := 0
 var carried: Pickup = null
@@ -164,6 +166,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Mirar al centro y apretar Enter: fija el cero de la cabeza y vuelve al frente.
 func _calibrate() -> void:
 	_head_offset = EyeInput.head
+	EyeInput.calibrate_blink()
 	camera.recenter()
 	if not running:
 		running = true
@@ -338,6 +341,14 @@ func _update_views(delta: float) -> void:
 	camera.set_zoom(EyeInput.zoom_hand and EyeInput.zoom_gesture == "Open_Palm",
 		fascination, delta)
 	zoom = camera.zoom_level
+
+	# Movimiento con la mano izquierda: cerca = adelante, lejos = atrás.
+	# Sin mano, vuelve al centro suavemente.
+	var target_z := 0.0
+	if EyeInput.zoom_hand:
+		target_z = lerpf(1.0, -1.5, EyeInput.hand_depth)
+	_camera_z = lerpf(_camera_z, target_z, 3.0 * delta)
+	camera.position.z = _camera_z
 
 	kaiser.apply(delta, contagion, EyeInput.hand, EyeInput.gesture == "Closed_Fist")
 

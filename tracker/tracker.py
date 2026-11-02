@@ -87,7 +87,8 @@ class Tracker:
         self._last_face: dict | None = None
         self._last_face_at = 0.0
         self._last_hands = {"hand": False, "gesture": "None",
-                            "zoom_hand": False, "zoom_gesture": "None"}
+                            "zoom_hand": False, "zoom_gesture": "None",
+                            "hand_depth": 0.0}
 
     def read(self, frame) -> dict:
         """Analiza un cuadro y devuelve el estado listo para mandar."""
@@ -167,7 +168,7 @@ class Tracker:
         return face
 
     def _read_hands(self, frame, timestamp: int) -> dict:
-        state = {"hand": False, "gesture": "None", "zoom_hand": False, "zoom_gesture": "None"}
+        state = {"hand": False, "gesture": "None", "zoom_hand": False, "zoom_gesture": "None", "hand_depth": 0.0}
         if self._frame_index % max(self.config.hand_every, 1) != 0:
             # Se reutiliza la ultima lectura de manos para ahorrar cuadros.
             return self._last_hands
@@ -196,12 +197,19 @@ class Tracker:
             if self.config.mirror_hands:
                 is_right = not is_right
 
+            # Tamano de la mano en la imagen: proxy de distancia a la camara.
+            # Mano grande = cerca, mano pequena = lejos.
+            xs = [lm.x for lm in landmarks]
+            ys = [lm.y for lm in landmarks]
+            box_area = (max(xs) - min(xs)) * (max(ys) - min(ys))
+
             if is_right:
                 state["hand"] = True
                 state["gesture"] = gesture
             else:
                 state["zoom_hand"] = True
                 state["zoom_gesture"] = gesture
+                state["hand_depth"] = box_area
 
         self._last_hands = state
         return state
@@ -248,6 +256,7 @@ class FakeSource:
             "gesture": "None",
             "zoom_hand": False,
             "zoom_gesture": "None",
+            "hand_depth": 0.0,
         }
 
     def overlay(self, frame, payload: dict) -> None:

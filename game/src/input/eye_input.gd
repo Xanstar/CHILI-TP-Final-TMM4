@@ -52,6 +52,10 @@ var blink_r := 0.0
 var blink := 0.0
 ## Segundos seguidos con LOS DOS ojos cerrados. Solo esto es mecánica.
 var eyes_closed_time := 0.0
+## Baseline de parpadeo calibrado: ojos abiertos del usuario.
+var _blink_baseline_l := 0.0
+var _blink_baseline_r := 0.0
+var _blink_calibrated := false
 
 ## Mano derecha a la vista.
 var hand := false
@@ -59,6 +63,9 @@ var gesture := "None"
 ## Mano izquierda a la vista (zoom).
 var zoom_hand := false
 var zoom_gesture := "None"
+## Tamaño de la mano izquierda en la imagen: proxy de distancia a la cámara.
+## 0 = lejos/pequeña, 1 = cerca/grande.
+var hand_depth := 0.0
 ## La palma derecha lleva abierta el tiempo suficiente como para elegir.
 var palm_ready := false
 
@@ -122,8 +129,8 @@ func set_source(new_source: Source) -> void:
 	gesture = "None"
 	zoom_hand = false
 	zoom_gesture = "None"
+	hand_depth = 0.0
 	palm_ready = false
-	_palm_time = 0.0
 	_fist_time = 0.0
 	_cooldown = 0.0
 	_armed = true
@@ -141,12 +148,23 @@ func uses_camera() -> bool:
 	return source == Source.CAMERA
 
 
+## Calibra el parpadeo con los ojos abiertos del usuario. Se llama en Enter.
+func calibrate_blink() -> void:
+	# Solo calibrar si los ojos parecen abiertos (blink < 0.3).
+	if blink_l < 0.3 and blink_r < 0.3:
+		_blink_baseline_l = blink_l
+		_blink_baseline_r = blink_r
+		_blink_calibrated = true
+		print("[EyeInput] parpadeo calibrado: %.2f / %.2f" % [blink_l, blink_r])
+
+
 func _ingest(frame: Dictionary, delta: float) -> void:
 	_raw_tracking = frame.get("face", false)
 	hand = frame.get("hand", false)
 	gesture = frame.get("gesture", "None")
 	zoom_hand = frame.get("zoom_hand", false)
 	zoom_gesture = frame.get("zoom_gesture", "None")
+	hand_depth = clampf(frame.get("hand_depth", 0.0), 0.0, 1.0)
 
 	if _raw_tracking:
 		_tracking_missing = 0.0
@@ -161,6 +179,16 @@ func _ingest(frame: Dictionary, delta: float) -> void:
 		blink_r = lerpf(blink_r, right, rate)
 		# Promedio: un guiño entorna la pantalla a medias, no la tapa entera.
 		blink = (blink_l + blink_r) * 0.5
+		# Calibracion: ajusta al baseline del usuario para no leer ojos pequenos
+		# como cerrados.
+		if _blink_calibrated:
+			var denom_l := 1.0 - _blink_baseline_l
+			var denom_r := 1.0 - _blink_baseline_r
+			if denom_l > 0.01:
+				blink_l = clampf((blink_l - _blink_baseline_l) / denom_l, 0.0, 1.0)
+			if denom_r > 0.01:
+				blink_r = clampf((blink_r - _blink_baseline_r) / denom_r, 0.0, 1.0)
+			blink = (blink_l + blink_r) * 0.5
 		# Los dos ojos tienen que estar cerrados: un guiño o un parpadeo no
 		# es quedarse mirando a oscuras.
 		if minf(blink_l, blink_r) > EYES_CLOSED:
@@ -205,6 +233,7 @@ func _watch_for_stall(delta: float) -> void:
 		gesture = "None"
 		zoom_hand = false
 		zoom_gesture = "None"
+		hand_depth = 0.0
 		_release_eyes(delta)
 
 

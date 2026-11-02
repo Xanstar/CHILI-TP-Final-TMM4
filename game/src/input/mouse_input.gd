@@ -57,6 +57,7 @@ func _frame(head: Vector2, hand: bool, gesture: String, zooming := false) -> Dic
 		"gesture": gesture,
 		"zoom_hand": zooming,
 		"zoom_gesture": "Open_Palm" if zooming else "None",
+		"hand_depth": 0.5,
 	}
 
 
