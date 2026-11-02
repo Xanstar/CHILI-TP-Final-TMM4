@@ -100,6 +100,8 @@ var delivered := 0
 var carried: Pickup = null
 var looked_remedy: Pickup = null
 var targeted_remedy: Pickup = null
+## Cuánto se acercó CHILI a tu espacio (0 = en su lugar, 1 = encima tuyo).
+var _creep := 0.0
 
 var _last_remedy: Pickup = null
 var _time_without_remedy := 100.0
@@ -263,6 +265,21 @@ func _update_rules(delta: float) -> void:
 	gravity += gravity_rate * (2.0 if focus == Focus.EYES_CLOSED else 1.0) * delta
 	gravity = minf(gravity, 1.0)
 
+	# 3b. CHILI se acerca si no lo mirás o si cerrás los ojos: FNAF.
+	var creeping := focus != Focus.CHILI or focus == Focus.EYES_CLOSED
+	if creeping:
+		_creep = move_toward(_creep, 1.0, 0.015 * delta)
+	else:
+		_creep = move_toward(_creep, 0.0, 0.03 * delta)
+	if delivered > 0:
+		_creep = move_toward(_creep, 0.0, 0.05 * delta)
+	_creep = clampf(_creep, 0.0, 1.0)
+
+	# Si CHILI se acercó mucho y no lo mirás, el contagio sube rápido.
+	if _creep > 0.8 and focus != Focus.CHILI:
+		contagion += contagion_rate * 2.0 * delta
+		contagion = minf(contagion, 1.0)
+
 	# 4. Mirarlo fascina... y contagia. Apartar la vista frena el contagio.
 	if focus == Focus.CHILI:
 		fascination = move_toward(fascination, 1.0, 0.35 * delta)
@@ -336,6 +353,11 @@ func _end(kind: StringName) -> void:
 func _update_views(delta: float) -> void:
 	chili.gravity = gravity
 	chili.apply(delta, _bait, _flash)
+	# CHILI se acerca cuando no lo mirás (solo si no está yendo a la puerta).
+	if chase < 0.1:
+		var base_pos := chili.base_position
+		var toward := camera.global_position + Vector3(0, -0.3, 0)
+		chili.position = base_pos.lerp(toward, _creep * 0.7)
 	chili.pull_towards(door.position, chase, delta)
 
 	camera.set_zoom(EyeInput.zoom_hand and EyeInput.zoom_gesture == "Open_Palm",
@@ -346,7 +368,7 @@ func _update_views(delta: float) -> void:
 	# Sin mano, vuelve al centro suavemente.
 	var target_z := 0.0
 	if EyeInput.zoom_hand:
-		target_z = lerpf(0.7, -1.0, EyeInput.hand_depth)
+		target_z = lerpf(1.0, -1.3, EyeInput.hand_depth)
 	_camera_z = lerpf(_camera_z, target_z, 3.0 * delta)
 	camera.position.z = _camera_z
 
@@ -400,6 +422,8 @@ func _status_text() -> String:
 		return "sin cámara — el juego sigue con la última pose"
 	if EyeInput.eyes_closed_time > eyes_closed_delay:
 		return "ojos cerrados"
+	if _creep > 0.7:
+		return "CHILI se acerca..."
 	return ""
 
 
