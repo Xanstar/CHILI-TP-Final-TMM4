@@ -8,28 +8,27 @@ extends Camera3D
 ## puede terminar de dar la vuelta (360°) girando la cabeza.
 
 @export_group("Sensibilidad")
-## Multiplicador del giro. 1.0 = uno a uno con la cabeza.
-@export var gain := 1.0
+## Multiplicador del giro. 1.0 = uno a uno con la cabeza. Más alto = menos cuello.
+@export var gain := 1.5
 ## Grados de zona muerta: por debajo no se mueve, así no tiembla quieto.
-@export var dead_zone := 1.5
+@export var dead_zone := 0.5
 ## Cuánto gira la cabeza como máximo sin empezar el giro completo.
 @export var max_yaw := 38.0
 @export var max_pitch := 22.0
 ## Escapes por si la cámara quedara al revés en tu setup.
 @export var invert_x := false
 @export var invert_y := false
-## Suavizado del movimiento (más alto, más seco). La entrada ya suaviza, así que
-## acá va alto a propósito: dos filtros lentos en cascada se sienten pesados.
-@export var smoothing := 30.0
+## Suavizado del movimiento (más alto, más seco).
+@export var smoothing := 15.0
 
 @export_group("Giro completo")
 ## Grados de cabeza a partir de los cuales la cabeza sigue girando.
-@export var edge_threshold := 22.0
+@export var edge_threshold := 15.0
 ## Segundos que hay que sostenerlo para que arranque el giro.
-@export var edge_delay := 0.4
+@export var edge_delay := 0.3
 @export var edge_speed := 90.0
 ## Grados extra de cabeza que hacen falta para llegar a la velocidad máxima.
-@export var edge_ramp := 18.0
+@export var edge_ramp := 12.0
 
 @export_group("Zoom")
 @export var base_fov := 75.0

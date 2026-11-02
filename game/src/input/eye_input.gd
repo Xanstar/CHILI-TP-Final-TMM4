@@ -24,7 +24,7 @@ const STALE_AFTER := 1.0
 ## Segundos sin cámara antes de pasar solo a mouse y teclado.
 const FALLBACK_AFTER := 3.0
 ## Qué tan rápido alcanza la pose su valor nuevo (más alto, más seco).
-const HEAD_SMOOTHING := 12.0
+const HEAD_SMOOTHING := 8.0
 ## Lo mismo para los párpados: más rápido, porque un parpadeo dura poco.
 const BLINK_SMOOTHING := 25.0
 ## Por encima de esto un ojo cuenta como cerrado.

@@ -55,7 +55,7 @@ const ENDINGS := {
 ## Segundos que se recuerda el último remedio mirado.
 @export var remedy_memory := 2.0
 ## Segundos: si mirabas a CHILI hace menos que esto, cuenta como que lo mirás.
-@export var chili_memory := 1.2
+@export var chili_memory := 2.0
 ## Segundos con los dos ojos cerrados para que cuente como "ojos cerrados".
 ## Es más largo que un parpadeo a propósito: parpadear no penaliza.
 @export var eyes_closed_delay := 0.5
@@ -270,7 +270,7 @@ func _update_rules(delta: float) -> void:
 
 	# 5. Abrir la mano con algo: si miraba a CHILI se lo entrega, si no lo deja.
 	if carried != null and EyeInput.hand and EyeInput.palm_ready \
-			and (_time - _grabbed_at) > 0.7:
+			and (_time - _grabbed_at) > 0.4:
 		if focus == Focus.CHILI or _time_without_chili < chili_memory:
 			_deliver()
 		else:
@@ -348,10 +348,15 @@ func _update_views(delta: float) -> void:
 
 	# Objetivo de lock-on: qué remedio está en la mira.
 	var target_text := ""
-	if running and not finished and targeted_remedy != null and carried == null:
+	if running and not finished and carried == null and targeted_remedy != null:
 		target_text = targeted_remedy.item_name
 		if looked_remedy == targeted_remedy:
 			target_text += "  —  " + ("agarrable" if EyeInput.palm_ready else "miralo")
+	elif running and not finished and carried != null:
+		if focus == Focus.CHILI or _time_without_chili < chili_memory:
+			target_text = "dárselo a CHILI — abrí la mano"
+		else:
+			target_text = "mirá a CHILI para dárselo"
 	hud.set_target(target_text)
 
 	for remedy in remedies:
