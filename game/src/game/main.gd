@@ -13,28 +13,33 @@ extends Node3D
 enum Focus { OTHER, ITEM, DOOR, CHILI, EYES_CLOSED, NO_SIGNAL }
 
 ## Los tres remedios: nombre, forma, color y lugar. Se crean en el _ready.
+## Van apoyados sobre la repisa del lavabo, que es el único mueble bajo del
+## baño: así quedan dentro del espacio jugable y a la vista desde el spawn.
+## La repisa está a y = DECK_Y; cada "at" sube lo que mide el objeto, así no
+## flotan ni se hunden.
 enum Remedy { CYLINDER, CAPSULE, BOX }
+
+## Altura de la repisa del lavabo, medida sobre el GLB con dev/probe_surface.gd.
+const DECK_Y := 0.345
 
 const REMEDIES := [
 	{
 		"name": "Venda", "shape": Remedy.CYLINDER,
 		"color": Color(0.9, 0.9, 0.85),
-		"yaw": -15.0, "distance": 3.0, "height": 0.8,
+		"at": Vector3(0.75, DECK_Y + 0.13, 0.42), "yaw": 20.0,
 	},
 	{
 		"name": "Frasco", "shape": Remedy.CAPSULE,
 		"color": Color(0.9, 0.55, 0.1),
-		"yaw": -30.0, "distance": 3.0, "height": 1.3,
+		"at": Vector3(1.42, DECK_Y + 0.16, 0.46), "yaw": -15.0,
 	},
 	{
 		"name": "Paño", "shape": Remedy.BOX,
 		"color": Color(0.3, 0.6, 0.7),
-		"yaw": 0.0, "distance": 3.0, "height": 1.0,
+		"at": Vector3(1.05, DECK_Y + 0.035, 0.145), "yaw": 0.0,
 	},
 ]
 
-const DOOR_YAW := 0.0
-const DOOR_DISTANCE := 2.0
 const ENDING_DELAY := 10.0
 
 ## Spawn por defecto: los eligió el jugador caminando por el mapa y apretando
@@ -147,6 +152,9 @@ var _saved_chili_pos := DEFAULT_CHILI_POS
 ## Rumbo con el que arranca la cabeza: mirando a la puerta.
 var _spawn_heading := 0.0
 var _time := 0.0
+## Se descarta el primer movimiento del mouse después de capturarlo: el salto
+## inicial es enorme y marea.
+var _skip_motion := false
 ## Pose de la cabeza con la que se calibró, en grados.
 var _head_offset := Vector2.ZERO
 
@@ -164,6 +172,7 @@ func _ready() -> void:
 
 	EyeInput.grab.connect(_on_grab)
 	EyeInput.source_changed.connect(_on_source_changed)
+	camera.set_free_look(not EyeInput.uses_camera())
 
 	# CHILI empieza visible en la puerta por unos segundos.
 	chili.visible = true
@@ -180,6 +189,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_time += delta
 	_update_camera(delta)
+	_update_focus(delta)
 	# Si el jugador no calibra a mano, lo hacemos solos después de un par de
 	# segundos con la cabeza quieta: el juego no debería quedar muerto.
 	if not running and not finished and EyeInput.tracking and _time > 2.0:
@@ -220,6 +230,30 @@ func _unhandled_input(event: InputEvent) -> void:
 				hud.toggle_debug()
 			KEY_F2:
 				EyeInput.toggle_source()
+			KEY_E:
+				_interact()
+			KEY_ESCAPE:
+				# Primero suelta el mouse; si ya está suelto, sale del juego.
+				if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				else:
+					get_tree().quit()
+
+
+## Modo sin cámara: el mouse gira la cabeza. Solo se usa cuando no hay tracker.
+func _input(event: InputEvent) -> void:
+	if EyeInput.uses_camera():
+		return
+	if event is InputEventMouseMotion:
+		if _skip_motion:
+			_skip_motion = false
+			return
+		camera.look(event.relative)
+	elif event is InputEventMouseButton and event.pressed:
+		# Un click dentro de la ventana vuelve a capturar el mouse.
+		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			_skip_motion = true
 
 
 # ============================================================
@@ -230,7 +264,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _calibrate() -> void:
 	_head_offset = EyeInput.head
 	EyeInput.calibrate_blink()
-	camera.recenter(_spawn_heading)
+	# Con mouse no hay cero que fijar: la mirada se queda donde está.
+	if EyeInput.uses_camera():
+		camera.recenter(_spawn_heading)
 	if not running:
 		running = true
 		hud.hide_hint()
@@ -238,6 +274,8 @@ func _calibrate() -> void:
 
 
 func _on_source_changed() -> void:
+	camera.set_free_look(not EyeInput.uses_camera())
+	_skip_motion = true
 	if not running:
 		hud.show_hint(_start_hint())
 
@@ -273,20 +311,42 @@ func _update_door_toggle(delta: float) -> void:
 	if _door_toggle_cooldown > 0.0:
 		return
 	var looking_at_door := _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0
-	if running:
-		pass
 	if not looking_at_door or not EyeInput.hand:
 		return
 	if EyeInput.gesture == "Closed_Fist" and not door_closed:
-		door_closed = true
-		room.set_door_closed(true)
-		_door_toggle_cooldown = 0.5
-		_notify("Puerta cerrada")
+		_toggle_door()
 	elif EyeInput.gesture == "Open_Palm" and door_closed:
-		door_closed = false
-		room.set_door_closed(false)
-		_door_toggle_cooldown = 0.5
-		_notify("Puerta abierta")
+		_toggle_door()
+
+
+## Abre o cierra la puerta. La usan el gesto de la mano y la tecla E.
+func _toggle_door() -> void:
+	door_closed = not door_closed
+	room.set_door_closed(door_closed)
+	_door_toggle_cooldown = 0.5
+	_notify("Puerta cerrada" if door_closed else "Puerta abierta")
+
+
+## Una sola tecla para jugar sin cámara: agarra el remedio que estás mirando,
+## se lo da a CHILI si lo estás mirando, o abre/cierra la puerta.
+func _interact() -> void:
+	if not running or finished:
+		return
+	if carried != null:
+		if focus == Focus.CHILI or _time_without_chili < chili_memory:
+			_cure_chili()
+		else:
+			_notify("Mirá a CHILI para darle el remedio")
+		return
+	# Un remedio en la mira gana sobre la puerta: si no, cerrar la puerta desde
+	# lejos robaría el agarre.
+	if looked_remedy != null or targeted_remedy != null:
+		_on_grab()
+		return
+	if room.glb_door != null and _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0:
+		_toggle_door()
+		return
+	_on_grab()
 
 
 func _set_lights(on: bool) -> void:
@@ -317,12 +377,46 @@ func _toggle_lights_recursive(node: Node, on: bool) -> void:
 
 
 func _update_camera(delta: float) -> void:
+	if not EyeInput.uses_camera():
+		# Sin cámara la mirada la maneja el mouse (ver _input).
+		return
 	var obstructed := EyeInput.hand_obstructs() or (
 		EyeInput.uses_camera() and EyeInput.zoom_hand)
 	var can_look := EyeInput.tracking and not obstructed
 	var can_turn := can_look \
 		and not (EyeInput.uses_camera() and EyeInput.hand and carried == null)
 	camera.follow(EyeInput.head - _head_offset, can_look, can_turn, delta)
+
+
+## Qué está mirando el jugador. Se recalcula cada frame y de acá salen el
+## agarre, la entrega, el brillo de los remedios y el texto del HUD.
+func _update_focus(delta: float) -> void:
+	_time_without_remedy += delta
+	_time_without_chili += delta
+
+	var in_sight := _remedy_in_sight()
+	if in_sight != null:
+		looked_remedy = in_sight
+		_last_remedy = in_sight
+		_time_without_remedy = 0.0
+	else:
+		looked_remedy = null
+	# Lock-on: el más cercano dentro de un cono más ancho, para no exigir
+	# precisión de francotirador con la cabeza.
+	targeted_remedy = _closest_remedy(remedy_angle + 5.0)
+
+	var chili_angle := _angle_to(chili, Vector3(0, 0.5, 0))
+	if chili.visible and chili_angle < focus_angle:
+		_time_without_chili = 0.0
+
+	if chili.visible and chili_angle < focus_angle:
+		focus = Focus.CHILI
+	elif room.glb_door != null and _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0:
+		focus = Focus.DOOR
+	elif in_sight != null:
+		focus = Focus.ITEM
+	else:
+		focus = Focus.OTHER
 
 
 func _update_rules(delta: float) -> void:
@@ -354,14 +448,7 @@ func _update_rules(delta: float) -> void:
 	# 2b. Medicar a CHILI: si llevás un objeto y lo mirás, lo curás.
 	if carried != null and (focus == Focus.CHILI or _time_without_chili < chili_memory) \
 			and EyeInput.hand and EyeInput.palm_ready and (_time - _grabbed_at) > 0.4:
-		contagion = maxf(contagion - 0.25, 0.0)
-		chili_at_door = false
-		chili.visible = false
-		_chili_next_appear = randf_range(chili_appear_min, chili_appear_max)
-		_notify("Medicaste a CHILI")
-		if carried != null:
-			carried.detach_to(self)
-			carried = null
+		_cure_chili()
 
 	# 2c. Cerrar los ojos hace que CHILI se vaya, pero acelera la infección.
 	if eyes_closed and chili_at_door:
@@ -404,13 +491,18 @@ func _update_rules(delta: float) -> void:
 	if gravity >= 1.0 and not finished:
 		_end(&"perdida")
 
-func _deliver() -> void:
+## Darle un remedio a CHILI: lo cura, lo espanta y cuenta como entrega.
+func _cure_chili() -> void:
 	carried.deliver()
-	_notify("Le diste: " + carried.item_name)
 	carried = null
 	delivered += 1
 	gravity = maxf(gravity - cure_per_delivery, 0.0)
+	contagion = maxf(contagion - 0.25, 0.0)
+	chili_at_door = false
+	chili.visible = false
+	_chili_next_appear = randf_range(chili_appear_min, chili_appear_max)
 	_flash = 1.0
+	_notify("Medicaste a CHILI")
 
 
 func _drop() -> void:
@@ -467,6 +559,9 @@ func _update_views(delta: float) -> void:
 		fascination, delta)
 	zoom = camera.zoom_level
 
+	for remedy in remedies:
+		remedy.set_highlight(_highlight_for(remedy))
+
 	# El personaje es estático: no se mueve con la mano.
 	# (Futuro: mirar un objeto + puño = moverse hacia él.)
 	pass
@@ -501,14 +596,17 @@ func _update_views(delta: float) -> void:
 
 
 func _highlight_for(remedy: Pickup) -> float:
+	# Sin cámara se agarra con E, así que no hay gesto que esperar: si está en
+	# la mira, ya se puede levantar.
+	var ready := EyeInput.palm_ready or not EyeInput.uses_camera()
 	if remedy.state == Pickup.State.HAND:
 		return 0.8
 	if remedy == looked_remedy:
 		# El brillo máximo es la señal de "ahora podés agarrarlo".
-		return 3.0 if EyeInput.palm_ready else 1.6
+		return 3.0 if ready else 1.6
 	if remedy == targeted_remedy:
 		# En la mira: se ve que está disponible, aunque no esté centrado.
-		return 1.2 if EyeInput.palm_ready else 0.7
+		return 1.2 if ready else 0.7
 	return 0.25
 
 
@@ -534,17 +632,21 @@ func _status_text() -> String:
 	return ""
 
 
+## Lo que dice el HUD según lo que tenés delante. Respeta el mismo orden que
+## `_interact`, así el cartel nunca promete algo distinto de lo que hace la tecla.
 func _target_text() -> String:
 	if not running or finished:
 		return ""
-	if door_closed:
-		return "puerta cerrada"
-	var looking_at_door := _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0
-	if looking_at_door:
-		if door_closed:
-			return "puerta cerrada — puño para abrir"
-		else:
-			return "puerta abierta — puño para cerrar"
+	var action := "E o puño" if EyeInput.uses_camera() else "E"
+	if carried != null:
+		return "llevás %s — mirá a CHILI y apretá %s" % [carried.item_name, action]
+	if looked_remedy != null:
+		return "%s — %s para agarrar" % [looked_remedy.item_name, action]
+	if targeted_remedy != null:
+		return "%s — apretá %s para agarrar" % [targeted_remedy.item_name, action]
+	if room.glb_door != null and _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0:
+		return ("puerta cerrada — %s para abrir" % action) if door_closed \
+			else ("puerta abierta — %s para cerrar" % action)
 	return ""
 
 
@@ -592,28 +694,27 @@ func _build_layout() -> void:
 			data["name"],
 			_mesh_for(data["shape"]),
 			data["color"],
-			Shapes.polar(data["yaw"], data["distance"], data["height"]),
+			data["at"],
 			data["yaw"])
 		remedies.append(remedy)
 
 
-## Zonas que el desorden tiene que respetar: (ángulo, distancia, margen).
+## Zonas que el desorden tiene que respetar: hoy no hay desorden, el baño ya
+## viene amueblado en el GLB.
 func _clear_zones() -> Array[Vector3]:
-	var zones: Array[Vector3] = []
-	for data in REMEDIES:
-		zones.append(Vector3(data["yaw"], data["distance"], 8.0))
-	zones.append(Vector3(DOOR_YAW, 99.0, 12.0))
-	return zones
+	return []
 
 
+## Las medidas importan: la mitad de la altura es lo que se suma a DECK_Y para
+## que el objeto quede apoyado y no flotando.
 func _mesh_for(shape: Remedy) -> Mesh:
 	match shape:
 		Remedy.CYLINDER:
-			return Shapes.cylinder(0.16, 0.2)
+			return Shapes.cylinder(0.13, 0.26)
 		Remedy.CAPSULE:
-			return Shapes.capsule(0.1, 0.4)
+			return Shapes.capsule(0.09, 0.32)
 		_:
-			return Shapes.box(Vector3(0.5, 0.08, 0.36))
+			return Shapes.box(Vector3(0.36, 0.07, 0.18))
 
 
 # ============================================================
@@ -655,8 +756,10 @@ func _first_available(candidate: Pickup) -> Pickup:
 
 
 func _start_hint() -> String:
-	var control := "la cabeza" if EyeInput.uses_camera() else "el mouse"
-	return "Poné %s mirando al frente\ny apretá ENTER para empezar" % control
+	if EyeInput.uses_camera():
+		return "Poné la cabeza mirando al frente\ny apretá ENTER para empezar"
+	return "Mové el mouse para mirar\ny apretá ENTER para empezar\n" \
+		+ "E agarra, entrega y abre la puerta"
 
 
 ## Nada de esto se muestra en pantalla: es para depurar en la consola.

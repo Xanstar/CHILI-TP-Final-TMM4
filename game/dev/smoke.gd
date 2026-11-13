@@ -44,11 +44,37 @@ func _ready() -> void:
 	var gravity_before: float = game.gravity
 	game.looked_remedy = remedy
 	game.call("_on_grab")
-	game.call("_deliver")
+	game.call("_cure_chili")
 	_expect(game.delivered == 1, "cuenta la entrega")
 	_expect(remedy.state == Pickup.State.DELIVERED, "el remedio quedó entregado")
 	_expect(not remedy.visible, "el remedio entregado no se ve")
 	_expect(game.gravity < gravity_before, "entregar baja la gravedad")
+
+	# La tecla E hace lo mismo que el gesto, sin cámara.
+	var second: Pickup = game.remedies[1]
+	game.looked_remedy = second
+	game.call("_interact")
+	_expect(game.carried == second, "la tecla E agarra el remedio mirado")
+
+	# El HUD tiene que decir lo mismo que hace la tecla: primero lo que llevás,
+	# después el remedio, y recién al final la puerta.
+	game.call("_drop")
+	_expect("llevás" not in game.call("_target_text"), "sin nada en la mano no habla de llevás")
+	var third: Pickup = game.remedies[2]
+	game.looked_remedy = third
+	_expect("para agarrar" in game.call("_target_text"), "el HUD avisa que E agarra")
+	_expect(third.item_name in game.call("_target_text"), "el HUD nombra el remedio")
+	game.looked_remedy = null
+	game.targeted_remedy = null
+	_expect("puerta" in game.call("_target_text"), "el HUD avisa de la puerta")
+
+	# Cerrar la puerta con E también funciona cuando no hay remedio en la mira.
+	game.carried = null
+	game.looked_remedy = null
+	game.targeted_remedy = null
+	var was_closed: bool = game.door_closed
+	game.call("_interact")
+	_expect(game.door_closed != was_closed, "la tecla E abre o cierra la puerta")
 
 	print("SMOKE: %s" % ("OK" if _failures == 0 else "%d fallas" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)

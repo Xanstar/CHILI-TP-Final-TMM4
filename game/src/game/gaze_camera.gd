@@ -45,6 +45,12 @@ extends Camera3D
 @export var zoom_fov := 38.0
 @export var zoom_speed := 2.5
 
+@export_group("Mouse (prueba)")
+## Grados de giro por píxel de mouse. Se usa solo cuando no hay cámara.
+@export var mouse_sensitivity := 0.22
+## Límite de cabeceo en modo mouse.
+@export var max_pitch_free := 80.0
+
 ## 0 = sin zoom, 1 = al máximo.
 var zoom_level := 0.0
 ## Giro acumulado sobre sí mismo, en grados.
@@ -53,6 +59,9 @@ var heading := 0.0
 var _yaw := 0.0
 var _pitch := 0.0
 var _edge_time := 0.0
+var _free := false
+var _look_yaw := 0.0
+var _look_pitch := 0.0
 
 
 ## [param head] es la pose del jugador en grados (X = giro, Y = cabeceo).
@@ -100,6 +109,34 @@ func recenter(to_heading := 0.0) -> void:
 	_yaw = 0.0
 	_pitch = 0.0
 	_edge_time = 0.0
+	_look_yaw = to_heading
+	_look_pitch = 0.0
+	rotation_degrees = Vector3(0.0, to_heading, 0.0)
+
+
+## Modo sin cámara: la mirada la maneja el mouse píxel a píxel, sin zona muerta
+## ni ganancia. Se prende cuando la entrada cae a mouse y teclado.
+func set_free_look(on: bool) -> void:
+	_free = on
+	if on:
+		# Arranca desde donde está mirando ahora, sin salto.
+		_look_yaw = rotation_degrees.y
+		_look_pitch = rotation_degrees.x
+	else:
+		heading = _look_yaw
+		_yaw = 0.0
+		_pitch = rotation_degrees.x
+
+
+## Giro por movimiento relativo del mouse (en píxeles).
+func look(relative: Vector2) -> void:
+	if not _free:
+		return
+	_look_yaw = fposmod(_look_yaw - relative.x * mouse_sensitivity, 360.0)
+	_look_pitch = clampf(_look_pitch - relative.y * mouse_sensitivity,
+		-max_pitch_free, max_pitch_free)
+	heading = _look_yaw
+	rotation_degrees = Vector3(_look_pitch, _look_yaw, 0.0)
 
 
 ## Rumbo actual en grados, para el HUD de depuración.

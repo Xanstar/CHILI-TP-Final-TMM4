@@ -86,7 +86,7 @@ func _ready() -> void:
 	if _udp.open(PORT) != OK:
 		push_warning("EyeInput: no pude escuchar el puerto %d." % PORT)
 	if Cli.has_flag("--mouse"):
-		source = Source.MOUSE
+		set_source(Source.MOUSE)
 
 
 func _process(delta: float) -> void:
@@ -134,6 +134,10 @@ func set_source(new_source: Source) -> void:
 	_fist_time = 0.0
 	_cooldown = 0.0
 	_armed = true
+	# Sin cámara no hay cabeza que seguir: el mouse pasa a manejar la mirada y
+	# se captura para que no se escape del borde de la ventana.
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if new_source == Source.MOUSE \
+		else Input.MOUSE_MODE_VISIBLE
 	print("[EyeInput] entrada: %s" % ("cámara" if new_source == Source.CAMERA else "mouse"))
 	source_changed.emit()
 

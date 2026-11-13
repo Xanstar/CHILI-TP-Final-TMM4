@@ -35,6 +35,7 @@ game/                  Proyecto Godot 4.6 (abrí esta carpeta)
       hud.gd           Viñeta, negro, lista de remedios y finales
   dev/
     smoke.tscn         Prueba de humo sin ventana
+    probe_surface.tscn Comprueba que los remedios no floten
 tracker/
   tracker.py           Cámara -> UDP: cabeza, parpadeo y gestos
   pose.py              Geometría de la cabeza (landmarks -> grados)
@@ -89,8 +90,9 @@ sin decir nada.
 | --- | --- | --- |
 | Mirar / girar la cabeza | girar la cabeza | mover el mouse |
 | Elegir un remedio | palma derecha abierta | click derecho |
-| Agarrar | puño después de la palma | click izquierdo |
-| Entregar | abrir la mano mirando a CHILI | click derecho mirando a CHILI |
+| Agarrar | puño después de la palma | `E` o click izquierdo |
+| Entregar | abrir la mano mirando a CHILI | `E` mirando a CHILI |
+| Abrir / cerrar la puerta | puño o palma mirando la puerta | `E` mirando la puerta |
 | Zoom | palma izquierda abierta | `Ctrl` |
 | Calibrar | `Enter` | `Enter` |
 | Mostrar datos | `F1` | `F1` |
@@ -98,6 +100,11 @@ sin decir nada.
 | Mover al personaje (temporal) | `W` `A` `S` `D` | `W` `A` `S` `D` |
 | Guardar spawn del jugador | `P` | `P` |
 | Guardar spawn de CHILI | `C` | `C` |
+| Soltar el mouse / salir | — | `Esc` |
+
+`E` es la mano de emergencia: hace lo mismo que el gesto, pero sin cámara. Si
+llevás algo y mirás a CHILI, se lo da; si mirás un remedio, lo agarra; si mirás
+la puerta, la abre o la cierra.
 
 El juego arranca con `Enter`: poné la cabeza mirando al frente y confirmá el cero.
 
@@ -111,6 +118,10 @@ Los dos spawn viven en `user://positions.cfg` (en Windows,
 caminar con `WASD`, apretar `P` para marcar dónde aparece el jugador y `C` para
 marcar dónde aparece CHILI (se apoya en el piso, no en la altura de los ojos).
 Si el archivo no existe, se usan los valores por defecto de `main.gd`.
+
+Los tres remedios están apoyados sobre la repisa del lavabo, dentro del baño y a
+la vista desde el spawn. La altura sale de `DECK_Y` en `main.gd`: si alguien
+mueve un objeto, `dev/probe_surface.tscn` avisa si quedó flotando.
 
 Si no llega ningún paquete en 3 segundos, pasa solo a mouse y teclado. Si el
 tracker arranca después, vuelve a la cámara sin que hagas nada.
@@ -174,13 +185,15 @@ agarrar.
 
 ```bash
 godot --headless --path game res://dev/smoke.tscn
+godot --headless --path game res://dev/probe_surface.tscn
 python tracker/test_pose.py
 ```
 
 La primera levanta la escena real y ejercita agarrar, soltar y entregar un
 remedio, además de comprobar que un parpadeo no dispara el estado "ojos
 cerrados" y que los ángulos de la cabeza llegan con el signo correcto. La
-segunda prueba la geometría de la cabeza sin cámara ni MediaPipe.
+segunda mide la repisa del lavabo y confirma que ningún remedio quedó flotando.
+La última prueba la geometría de la cabeza sin cámara ni MediaPipe.
 
 Si la cámara no te detecta bien, corré `python tracker/probe.py`: abre la
 cámara, te guía por seis posiciones con una ventana y guarda un JSON con las
