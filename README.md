@@ -95,8 +95,22 @@ sin decir nada.
 | Calibrar | `Enter` | `Enter` |
 | Mostrar datos | `F1` | `F1` |
 | Cambiar cámara/mouse | `F2` | `F2` |
+| Mover al personaje (temporal) | `W` `A` `S` `D` | `W` `A` `S` `D` |
+| Guardar spawn del jugador | `P` | `P` |
+| Guardar spawn de CHILI | `C` | `C` |
 
 El juego arranca con `Enter`: poné la cabeza mirando al frente y confirmá el cero.
+
+Al arrancar, la cabeza queda mirando a la puerta. El rumbo se calcula desde el
+spawn del jugador, así no hay que torcer el cuello para encontrarla.
+
+### Dónde arranca cada cosa
+
+Los dos spawn viven en `user://positions.cfg` (en Windows,
+`%APPDATA%\Godot\app_userdata\CHILI\positions.cfg`) y se eligen en caliente:
+caminar con `WASD`, apretar `P` para marcar dónde aparece el jugador y `C` para
+marcar dónde aparece CHILI (se apoya en el piso, no en la altura de los ojos).
+Si el archivo no existe, se usan los valores por defecto de `main.gd`.
 
 Si no llega ningún paquete en 3 segundos, pasa solo a mouse y teclado. Si el
 tracker arranca después, vuelve a la cámara sin que hagas nada.

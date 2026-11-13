@@ -10,6 +10,13 @@ const WALL_HEIGHT := 5.0
 const CLUTTER_COUNT := 0
 const SEED := 7
 
+## La puerta del GLB gira sobre su bisagra (el origen del nodo `Door_001`), así
+## que el único eje que hay que tocar es el vertical. El asset trae la puerta
+## entreabierta a -42,7°: 0° es cerrada (alineada con la pared) y 90° es abierta
+## hacia el pasillo, que es el lado +Z del baño.
+const DOOR_CLOSED_YAW := 0.0
+const DOOR_OPEN_YAW := 90.0
+
 var _clear_zones: Array[Vector3] = []
 var glb_door: Node3D = null
 var _door_original_rotation: Vector3 = Vector3.ZERO
@@ -20,12 +27,12 @@ func set_door_closed(closed: bool) -> void:
 	if glb_door == null:
 		return
 	_door_closed = closed
-	if closed:
-		# Cerrada: alineada con la pared.
-		glb_door.rotation_degrees.y = 90.0
-	else:
-		# Abierta: hacia el pasillo (donde está CHILI).
-		glb_door.rotation_degrees.y = -90.0
+	# Se conserva la inclinación original del asset (X y Z) y solo se cambia el
+	# giro vertical: así la puerta gira como una puerta y no como una tapa.
+	glb_door.rotation_degrees = Vector3(
+		_door_original_rotation.x,
+		DOOR_CLOSED_YAW if closed else DOOR_OPEN_YAW,
+		_door_original_rotation.z)
 
 
 func build(clear_zones: Array[Vector3]) -> void:

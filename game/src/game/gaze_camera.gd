@@ -93,9 +93,10 @@ func set_zoom(held: bool, fascination: float, delta: float) -> void:
 	fov = lerpf(base_fov, zoom_fov, zoom_level) * lerpf(1.0, 0.7, fascination)
 
 
-## Volver a mirar al frente: se usa al calibrar.
-func recenter() -> void:
-	heading = 0.0
+## Volver a mirar al frente: se usa al calibrar. [param to_heading] permite
+## arrancar mirando a un lado concreto (por ejemplo, hacia la puerta).
+func recenter(to_heading := 0.0) -> void:
+	heading = to_heading
 	_yaw = 0.0
 	_pitch = 0.0
 	_edge_time = 0.0

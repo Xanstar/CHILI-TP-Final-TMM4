@@ -37,6 +37,14 @@ const DOOR_YAW := 0.0
 const DOOR_DISTANCE := 2.0
 const ENDING_DELAY := 10.0
 
+## Spawn por defecto: los eligió el jugador caminando por el mapa y apretando
+## P (jugador) y C (CHILI). Se pueden pisar con `user://positions.cfg`.
+const DEFAULT_PLAYER_POS := Vector3(0.115139, 0.65, -1.574154)
+const DEFAULT_CHILI_POS := Vector3(-0.65542, 0.65, 2.147936)
+## Altura del piso del baño en coordenadas del mundo: CHILI se apoya acá.
+const FLOOR_Y := -0.49
+const CONFIG_PATH := "user://positions.cfg"
+
 const ENDINGS := {
 	&"contemplacion": "Te ves reflejado en la pantalla apagada.\n\nYa no sos el que vino a cazar monstruos.",
 	&"oscuridad": "Las luces se apagaron.\n\nCHILI está adentro.\n\nYa es tarde.",
@@ -134,8 +142,10 @@ var _bait_at := 2.0
 var _flash := 0.0
 var _p_pressed := false
 var _c_pressed := false
-var _saved_player_pos := Vector3.ZERO
-var _saved_chili_pos := Vector3.ZERO
+var _saved_player_pos := DEFAULT_PLAYER_POS
+var _saved_chili_pos := DEFAULT_CHILI_POS
+## Rumbo con el que arranca la cabeza: mirando a la puerta.
+var _spawn_heading := 0.0
 var _time := 0.0
 ## Pose de la cabeza con la que se calibró, en grados.
 var _head_offset := Vector2.ZERO
@@ -143,7 +153,9 @@ var _head_offset := Vector2.ZERO
 
 func _ready() -> void:
 	room.build(_clear_zones())
+	_load_positions()
 	_build_layout()
+	_apply_spawn()
 	chili.build()
 	kaiser.build()
 	hud.build()
@@ -156,8 +168,7 @@ func _ready() -> void:
 	# CHILI empieza visible en la puerta por unos segundos.
 	chili.visible = true
 	chili_at_door = true
-	chili.position = room.glb_door.global_position + Vector3(0, 0, -1.5)
-	chili.rotation_degrees.y = 180.0
+	_place_chili()
 	_chili_stay_timer = 0.0
 	_chili_next_appear = 0.0
 
@@ -187,11 +198,13 @@ func _process(delta: float) -> void:
 		print("[POS] jugador guardado:", _saved_player_pos)
 	if not Input.is_key_pressed(KEY_P):
 		_p_pressed = false
-	# Tecla C: guardar posición de CHILI.
+	# Tecla C: guardar posición de CHILI (se apoya en el piso, no en los ojos).
 	if Input.is_key_pressed(KEY_C) and not _c_pressed:
 		_c_pressed = true
-		_saved_chili_pos = camera.global_position
+		_saved_chili_pos = Vector3(camera.global_position.x, FLOOR_Y, camera.global_position.z)
 		_save_positions()
+		chili.visible = true
+		_place_chili()
 		print("[POS] chili guardado:", _saved_chili_pos)
 	if not Input.is_key_pressed(KEY_C):
 		_c_pressed = false
@@ -217,7 +230,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _calibrate() -> void:
 	_head_offset = EyeInput.head
 	EyeInput.calibrate_blink()
-	camera.recenter()
+	camera.recenter(_spawn_heading)
 	if not running:
 		running = true
 		hud.hide_hint()
@@ -320,9 +333,8 @@ func _update_rules(delta: float) -> void:
 	if not chili_at_door and not chili_inside and _chili_appear_timer >= _chili_next_appear:
 		chili_at_door = true
 		chili.visible = true
-		# Colocar CHILI justo afuera de la puerta.
-		chili.position = room.glb_door.global_position + Vector3(0, 0, -1.5)
-		chili.rotation_degrees.y = 180.0
+		# Colocar CHILI en el pasillo, donde quedó guardado.
+		_place_chili()
 		_chili_stay_timer = 0.0
 		_chili_appear_timer = 0.0
 
@@ -382,7 +394,7 @@ func _update_rules(delta: float) -> void:
 			# CHILI se metió adentro → infección instantánea → game over.
 			chili_inside = true
 			chili.visible = true
-			chili.position = camera.position + Vector3(0, -0.3, -1.0)
+			chili.position = Vector3(camera.position.x, FLOOR_Y, camera.position.z - 1.0)
 			contagion = 1.0
 			_end(&"oscuridad")
 
@@ -654,11 +666,53 @@ func _notify(text: String) -> void:
 
 ## Guarda las posiciones elegidas por el jugador en un archivo.
 func _save_positions() -> void:
-	var file := FileAccess.open("user://positions.cfg", FileAccess.WRITE)
+	var file := FileAccess.open(CONFIG_PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("No pude guardar posiciones")
 		return
 	file.store_line("player=%s" % _saved_player_pos)
 	file.store_line("chili=%s" % _saved_chili_pos)
 	file.close()
-	print("[POS] guardado en user://positions.cfg")
+	print("[POS] guardado en ", CONFIG_PATH)
+
+
+## Lee los spawn guardados con P y C. Si el archivo no existe, quedan los
+## valores por defecto: el juego nunca arranca sin posiciones.
+func _load_positions() -> void:
+	var file := FileAccess.open(CONFIG_PATH, FileAccess.READ)
+	if file == null:
+		print("[POS] sin ", CONFIG_PATH, ": uso los spawn por defecto")
+		return
+	while not file.eof_reached():
+		var line := file.get_line().strip_edges()
+		var parts := line.split("=", true, 1)
+		if parts.size() != 2:
+			continue
+		var value: Variant = str_to_var(parts[1])
+		if not value is Vector3:
+			continue
+		match parts[0]:
+			"player":
+				_saved_player_pos = value
+			"chili":
+				_saved_chili_pos = value
+	file.close()
+	print("[POS] cargado: jugador=", _saved_player_pos, " chili=", _saved_chili_pos)
+
+
+## Pone al jugador en su spawn y lo deja mirando a la puerta. Si no, la puerta
+## arranca a la espalda y hay que torcer el cuello para encontrarla.
+func _apply_spawn() -> void:
+	camera.position = _saved_player_pos
+	var to_door := room.glb_door.global_position - _saved_player_pos
+	_spawn_heading = rad_to_deg(atan2(-to_door.x, -to_door.z))
+	camera.recenter(_spawn_heading)
+	print("[POS] spawn del jugador: ", camera.position, " rumbo: %.1f°" % _spawn_heading)
+
+
+## CHILI vive en el pasillo, del otro lado de la puerta, donde lo ubicó el
+## jugador con la tecla C. Se le fuerza la altura del piso para que no flote.
+func _place_chili() -> void:
+	chili.position = Vector3(_saved_chili_pos.x, FLOOR_Y, _saved_chili_pos.z)
+	chili.base_position = chili.position
+	chili.rotation_degrees.y = 180.0
