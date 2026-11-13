@@ -170,12 +170,14 @@ Para probar el juego sin Python alcanza con `--mouse`: no necesita el protocolo.
 
 ## Cómo se gana
 
-Hay cuatro finales, y tres de ellos son malos:
+Hay cuatro finales, y solo uno es bueno:
 
-- **ayuda** — entregar los tres remedios antes de que CHILI se apague.
-- **pérdida** — CHILI se muere solo mientras mirás para otro lado.
+- **ayuda** — entregar los tres remedios. CHILI respira; tus patas ya no son
+  las mismas.
+- **pérdida** — CHILI se apaga solo mientras mirás para otro lado.
 - **contemplación** — el contagio llega al máximo de tanto mirarlo.
-- **abandono** — sostener la mirada en la puerta hasta irse.
+- **oscuridad** — cerrar la puerta gasta la energía, se apaga la luz y, cuando
+  vuelve, CHILI ya está adentro, a un metro tuyo: el contagio se va al máximo.
 
 Los primeros 20 segundos de cada partida no hay tutorial: la lista de la esquina
 derecha son los remedios que faltan, y el brillo de cada objeto dice si lo podés

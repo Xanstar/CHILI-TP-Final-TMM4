@@ -68,7 +68,7 @@ func _ready() -> void:
 	game.targeted_remedy = null
 	_expect("puerta" in game.call("_target_text"), "el HUD avisa de la puerta")
 
-	# Cerrar la puerta con E también funciona cuando no hay remedio en la mira.
+	# El botón de la puerta se prueba al final: cambia el estado del juego.
 	game.carried = null
 	game.looked_remedy = null
 	game.targeted_remedy = null
@@ -76,8 +76,65 @@ func _ready() -> void:
 	game.call("_interact")
 	_expect(game.door_closed != was_closed, "la tecla E abre o cierra la puerta")
 
+	await _check_win_ending()
+	await _check_blackout_ending()
+
 	print("SMOKE: %s" % ("OK" if _failures == 0 else "%d fallas" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
+
+
+## Entregar los tres remedios cierra la partida, como antes del refactor.
+## Se entregan por la vía real (E para agarrar, E para entregar), no tocando el
+## contador a mano.
+func _check_win_ending() -> void:
+	var game: Game = await _fresh_game()
+	for remedy: Pickup in game.remedies:
+		game.looked_remedy = remedy
+		game.call("_interact")
+		_expect(game.carried == remedy, "E agarra el %s" % remedy.item_name)
+		game.focus = Game.Focus.CHILI
+		game.call("_interact")
+	_expect(game.delivered == game.remedies.size(), "se entregaron los tres")
+	game.call("_update_rules", 0.016)
+	_expect(game.finished, "entregar los tres remedios termina la partida")
+	_expect(game.ending == &"ayuda", "el final de los tres remedios es 'ayuda'")
+
+
+## El apagón no termina en negro: vuelve la luz, CHILI aparece delante del
+## jugador y el contagio se va al máximo.
+func _check_blackout_ending() -> void:
+	var game: Game = await _fresh_game()
+	game.blackout_beat = 0.0
+	game.door_closed = true
+	game.energy = 0.0
+	game.call("_update_rules", 0.016)
+	_expect(not game.lights_on, "la energía en cero apaga las luces")
+
+	game._blackout_timer = 0.0
+	game.call("_update_rules", 0.016)
+	_expect(game.lights_on, "después del apagón vuelve la luz")
+	_expect(game.chili.visible, "CHILI está a la vista con la luz prendida")
+	_expect(game.contagion >= 1.0, "el contagio queda al máximo")
+
+	var toward := game.chili.global_position - game.camera.global_position
+	toward.y = 0.0
+	var forward := -game.camera.global_transform.basis.z
+	forward.y = 0.0
+	_expect(forward.normalized().dot(toward.normalized()) > 0.9,
+		"CHILI aparece delante de la cámara")
+
+	# El final cae después del respiro, no en el mismo frame.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_expect(game.ending == &"oscuridad", "el apagón termina en 'oscuridad'")
+
+
+func _fresh_game() -> Game:
+	var game: Game = load("res://main.tscn").instantiate()
+	add_child(game)
+	await get_tree().process_frame
+	game.running = true
+	return game
 
 
 func _expect(condition: bool, description: String) -> void:

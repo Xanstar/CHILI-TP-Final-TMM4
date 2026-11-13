@@ -50,11 +50,13 @@ const DEFAULT_CHILI_POS := Vector3(-0.65542, 0.65, 2.147936)
 const FLOOR_Y := -0.49
 const CONFIG_PATH := "user://positions.cfg"
 
+## Los finales. El texto es lo último que se lee: tiene que describir lo que
+## acaba de pasar en pantalla.
 const ENDINGS := {
+	&"ayuda": "CHILI respira.\n\nTus patas ya no son las mismas.",
 	&"contemplacion": "Te ves reflejado en la pantalla apagada.\n\nYa no sos el que vino a cazar monstruos.",
-	&"oscuridad": "Las luces se apagaron.\n\nCHILI está adentro.\n\nYa es tarde.",
+	&"oscuridad": "Las luces volvieron.\n\nYa estaba adentro.\n\nYa es tarde.",
 	&"perdida": "Mientras mirabas para otro lado,\nCHILI dejó de moverse.",
-	&"escape": "Saliste.\n\nCHILI te sigue, arrastrándose.",
 }
 
 @export_group("Mirada")
@@ -83,6 +85,9 @@ const ENDINGS := {
 @export var door_energy_drain := 0.08
 ## Segundos de oscuridad antes de que CHILI infecte.
 @export var blackout_duration := 3.0
+## Segundos de luz con CHILI delante antes de que caiga el final. Sin este
+## respiro, el cartel del final tapa justo la imagen del susto.
+@export var blackout_beat := 1.6
 ## Segundos que tarda CHILI en aparecer en la puerta.
 @export var chili_appear_min := 8.0
 @export var chili_appear_max := 15.0
@@ -105,6 +110,8 @@ var remedies: Array[Pickup] = []
 # --- estado del juego ---
 var running := false
 var finished := false
+## Qué final se disparó (vacío mientras se juega).
+var ending := &""
 var focus := Focus.OTHER
 var gravity := 0.35
 var contagion := 0.0
@@ -136,6 +143,9 @@ var _chili_next_appear := 10.0
 # --- apagón ---
 var _blackout_timer := 0.0
 var _blackout_active := false
+
+## Ya hay un final en camino: se espera el respiro y no se dispara otro.
+var _ending_queued := false
 
 var _last_remedy: Pickup = null
 var _time_without_remedy := 100.0
@@ -283,7 +293,7 @@ func _on_source_changed() -> void:
 ## El gesto lo detecta EyeInput: palma abierta y después puño, con la mano derecha.
 ## También se puede agarrar directo con puño si se está mirando un remedio.
 func _on_grab() -> void:
-	if not running or finished:
+	if not running or finished or _ending_queued:
 		return
 	if carried != null:
 		_notify("Ya tenés algo en la mano")
@@ -330,7 +340,7 @@ func _toggle_door() -> void:
 ## Una sola tecla para jugar sin cámara: agarra el remedio que estás mirando,
 ## se lo da a CHILI si lo estás mirando, o abre/cierra la puerta.
 func _interact() -> void:
-	if not running or finished:
+	if not running or finished or _ending_queued:
 		return
 	if carried != null:
 		if focus == Focus.CHILI or _time_without_chili < chili_memory:
@@ -420,6 +430,9 @@ func _update_focus(delta: float) -> void:
 
 
 func _update_rules(delta: float) -> void:
+	# Con un final ya disparado no quedan reglas: se deja ver la escena.
+	if _ending_queued:
+		return
 	var eyes_closed := EyeInput.eyes_closed_time > eyes_closed_delay and not EyeInput.hand
 
 	# 1. CHILI aparece en la puerta periódicamente.
@@ -478,18 +491,22 @@ func _update_rules(delta: float) -> void:
 			_blackout_active = false
 			lights_on = true
 			_set_lights(true)
-			# CHILI se metió adentro → infección instantánea → game over.
+			# Mientras estaba oscuro se metió adentro. Vuelve la luz y está ahí,
+			# a un metro tuyo: el contagio se va a 1 y no hay salida.
 			chili_inside = true
 			chili.visible = true
-			chili.position = Vector3(camera.position.x, FLOOR_Y, camera.position.z - 1.0)
+			_place_chili_in_front()
 			contagion = 1.0
-			_end(&"oscuridad")
+			_finish_later(&"oscuridad", blackout_beat)
 
-	# 5. Finales.
-	if contagion >= 1.0 and not finished:
-		_end(&"contemplacion")
-	if gravity >= 1.0 and not finished:
-		_end(&"perdida")
+	# 5. Finales. Uno solo por partida: el primero que llega gana.
+	if not _ending_queued:
+		if contagion >= 1.0:
+			_end(&"contemplacion")
+		elif gravity >= 1.0:
+			_end(&"perdida")
+		elif delivered >= remedies.size():
+			_end(&"ayuda")
 
 ## Darle un remedio a CHILI: lo cura, lo espanta y cuenta como entrega.
 func _cure_chili() -> void:
@@ -511,12 +528,27 @@ func _drop() -> void:
 	carried = null
 
 
+## Cierra la partida con el cartel del final. Espera un poco para que se vea lo
+## que acaba de pasar en la escena.
 func _end(kind: StringName) -> void:
+	if finished:
+		return
 	finished = true
+	ending = kind
 	hud.show_ending(ENDINGS[kind])
 	print("[Main] FINAL: ", kind)
 	await get_tree().create_timer(ENDING_DELAY).timeout
 	get_tree().reload_current_scene()
+
+
+## Programa el final con un respiro de suspenso. Uno solo por partida: si ya
+## hay uno en camino, se ignora.
+func _finish_later(kind: StringName, delay: float) -> void:
+	if finished or _ending_queued:
+		return
+	_ending_queued = true
+	await get_tree().create_timer(delay).timeout
+	_end(kind)
 
 
 # ============================================================
@@ -819,3 +851,22 @@ func _place_chili() -> void:
 	chili.position = Vector3(_saved_chili_pos.x, FLOOR_Y, _saved_chili_pos.z)
 	chili.base_position = chili.position
 	chili.rotation_degrees.y = 180.0
+
+
+## El golpe del apagón: CHILI aparece parado delante de la cámara, mirándote.
+## Se calcula desde el rumbo actual, así el jugador no puede quedar mirando
+## para el otro lado justo cuando vuelve la luz.
+func _place_chili_in_front(distance := 1.3) -> void:
+	var forward := -camera.global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.001:
+		forward = Vector3(0.0, 0.0, 1.0)
+	forward = forward.normalized()
+	chili.position = Vector3(
+		camera.position.x + forward.x * distance,
+		FLOOR_Y,
+		camera.position.z + forward.z * distance)
+	chili.base_position = chili.position
+	# El modelo mira hacia +Z con giro 0: para que encare al jugador, la
+	# dirección tiene que ser la opuesta a la de la cámara.
+	chili.rotation_degrees.y = rad_to_deg(atan2(-forward.x, -forward.z))
