@@ -320,32 +320,13 @@ Lo que funciona hoy está verificado con las pruebas de la sección 8 y con el
 tracker `--fake` de punta a punta.
 
 Lo que falta o está flojo, ordenado por prioridad:
-
-1. **Licencia.** El repo no tiene `LICENSE`: sin licencia no se puede reutilizar.
-   Si se agrega, aclarar que no cubre `game/assets/bathroom`.
-2. **El GLB del baño no trae licencia** en el repo. Hay que averiguar la del pack
-   original antes de publicar el juego como build.
-3. **No hay build exportada** (`.exe` o web). `exports/` está ignorado. Para
-   entregar un ejecutable hay que configurar los presets de exportación.
-4. **El desorden procedural está apagado** (`CLUTTER_COUNT = 0` en `room.gd`): el
+ **El desorden procedural está apagado** (`CLUTTER_COUNT = 0` en `room.gd`): el
    baño quedó limpio. Si se quiere más caos, hay que revisar que no tape los
    remedios ni la puerta.
-5. **Los textos del HUD están hardcodeados en español.** Si el TP se entrega en
-   otro idioma, hay que pasarlos a un archivo de traducción.
-6. **No hay tests de UI ni de la escena completa**: `smoke` cubre las reglas, no
+ **No hay tests de UI ni de la escena completa**: `smoke` cubre las reglas, no
    el dibujo.
-7. **La sensibilidad del gesto está calibrada a ojo.** `PALM_HOLD`, `FIST_HOLD` y
+ **La sensibilidad del gesto está calibrada a ojo.** `PALM_HOLD`, `FIST_HOLD` y
    `GRAB_COOLDOWN` en `eye_input.gd` pueden necesitar ajuste con otras cámaras.
-8. **Los spawns están fijos.** Se eligen editando `main.gd` o
-   `user://positions.cfg`; no hay herramienta para moverlos en caliente.
+ **Los spawns están fijos.** Se eligen editando `main.gd` o
+   `user://positions.cfg`; 
 
----
-
-## 11. Créditos y licencias
-
-- **El baño** (`game/assets/bathroom`): GLB de itch.io. La licencia del pack
-  original no está en el repo; hay que confirmarla antes de publicar el juego.
-- **Los remedios** (`game/assets/remedies`): modelos de
-  [Grab3D](https://grab3d.com), **CC0 1.0**. Cada carpeta trae su `LICENSE.txt` y
-  su `manifest.json`.
-- **MediaPipe** y sus modelos (`tracker/models`): Google, Apache 2.0.
