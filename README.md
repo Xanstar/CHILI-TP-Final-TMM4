@@ -45,7 +45,7 @@ que se habían agregado en la versión nueva.
 - El refactor en módulos (`game/src/...`).
 
 Si querés eso, está la rama principal. El detalle de **todos** los cambios está
-en [`CAMBIOS.md`](../../blob/main/CAMBIOS.md) de esa rama.
+en [`CAMBIOS.md`](https://github.com/Xanstar/CHILI-TP-Final-TMM4/blob/main/CAMBIOS.md) de esa rama.
 
 ## Pruebas
 
