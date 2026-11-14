@@ -13,8 +13,8 @@ hacen tus manos. No hay mouse ni teclado. Sin cámara no hay juego.
 > código, estructura, escenario y narrativa, commit por commit.
 >
 > Si preferís una versión más parecida al trabajo original, existe la rama
-> [`legacy/original-camara`](../../tree/legacy/original-camara): el juego de
-> antes tal cual, pero con las mejoras de cámara de este repo.
+> [`legacy/original-camara`](https://github.com/Xanstar/CHILI-TP-Final-TMM4/tree/legacy/original-camara):
+> el juego de antes tal cual, pero con las mejoras de cámara de este repo.
 
 ## Estructura
 
