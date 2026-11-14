@@ -19,7 +19,7 @@ if not defined GODOT (
     echo No encuentro Godot.
     echo.
     echo Instalalo desde https://godotengine.org/download/windows
-    echo o dejá el ejecutable en: %LOCALAPPDATA%\Programs\Godot
+    echo o deja el ejecutable en: %LOCALAPPDATA%\Programs\Godot
     echo.
     pause
     exit /b 1
