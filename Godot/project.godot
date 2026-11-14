@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Taller 4 - tp3"
-run/main_scene="uid://nsituhwu8uyu"
+run/main_scene="uid://83e3uscqkmil"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 

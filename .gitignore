@@ -1,8 +1,19 @@
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 
 # Godot
 .godot/
-/android/
+android/
+exports/
+*.translation
+
+# Local
+tools/
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
