@@ -22,7 +22,8 @@ todo el código:
 
 1. **Un solo canal de entrada.** Todo se hace con la cabeza, las manos y los
    ojos. No hay teclado ni mouse, ni siquiera como respaldo: si el tracker no
-   manda datos, no hay juego.
+   manda datos, no hay juego. Cada mano tiene un trabajo: la derecha agarra los
+   remedios, la izquierda abre y cierra la puerta.
 2. **Mirar es información y es costo.** Mirar a CHILI permite ver su estado y
    habilitar la entrega, pero sube el contagio. Cerrar los ojos lo espanta y
    acelera la infección. Nunca hay una acción gratis.
@@ -78,7 +79,7 @@ game/                  Proyecto Godot 4.6 (esta es la carpeta que se abre)
       udp_tracker.gd   Abre el puerto 4242 y entrega paquetes
     game/
       main.gd          Orquestador: reglas, estados, finales y HUD
-      gaze_camera.gd   La cabeza de Kaiser: mirada, 360°, zoom
+      gaze_camera.gd   La cabeza de Kaiser: mirada y giro de 360°
     world/
       room.gd          El baño, la puerta del GLB, las luces
       chili.gd         CHILI: deterioro, respiración, posición
@@ -125,11 +126,11 @@ var blink_l: float          # 0 = abierto, 1 = cerrado
 var blink_r: float
 var blink: float            # promedio, solo efecto visual
 var eyes_closed_time: float # segundos con los dos ojos cerrados (mecánica)
-var hand: bool              # mano derecha a la vista
+var hand: bool              # mano derecha a la vista (agarra)
 var gesture: String         # "None", "Open_Palm", "Closed_Fist", ...
-var zoom_hand: bool         # mano izquierda
-var zoom_gesture: String
-var hand_depth: float
+var left_hand: bool         # mano izquierda a la vista (puerta)
+var left_gesture: String
+var hand_depth: float       # tamaño de la mano izquierda; hoy no se usa (era para el zoom)
 var palm_ready: bool        # la palma lleva abierta el tiempo mínimo
 
 signal grab                 # palma -> puño
@@ -144,7 +145,7 @@ de entrada de las pruebas: `dev/smoke` los usa para inyectar paquetes sin cámar
 
 ```gdscript
 func follow(head: Vector2, can_look: bool, can_turn: bool, delta: float) -> void
-func set_zoom(held: bool, fascination: float, delta: float) -> void
+func set_zoom(held: bool, fascination: float, delta: float) -> void   # held siempre false: zoom apagado
 func recenter(to_heading := 0.0) -> void
 func heading_degrees() -> int
 ```
@@ -252,15 +253,19 @@ Un JSON por paquete UDP a `127.0.0.1:4242`:
   "blink_r": 0.05,
   "hand": true,
   "gesture": "Closed_Fist",
-  "zoom_hand": false,
-  "zoom_gesture": "None"
+  "left_hand": false,
+  "left_gesture": "None"
 }
 ```
 
 - `head_yaw` / `head_pitch` en **grados**. Positivo = izquierda del jugador /
   mentón arriba. Los saca `pose.py` de la geometría de la cara.
 - `blink_l` / `blink_r`: 0 = abierto, 1 = cerrado, por ojo (EAR).
-- `gesture` / `zoom_gesture`: `"None"`, `"Open_Palm"`, `"Closed_Fist"`, etc.
+- `gesture` / `left_gesture`: `"None"`, `"Open_Palm"`, `"Closed_Fist"`, etc.
+  `gesture` es la mano derecha (agarra) y `left_gesture` la izquierda (puerta).
+- `hand_depth`: tamaño de la mano izquierda en la imagen. Se sigue mandando pero
+  el juego no lo usa: era para el zoom, que está apagado mientras se arregla el
+  bug.
 - `face: false` significa "sin lectura", no "ojos cerrados". Los campos de la
   cara no vienen en ese caso.
 
@@ -283,8 +288,9 @@ python tracker/test_pose.py                               # POSE: OK
 - **`dev/smoke.tscn`** levanta la escena real e inyecta paquetes en `EyeInput`.
   Prueba los gestos de verdad: palma + puño agarra, un puño sostenido no repite,
   soltar devuelve el remedio, mano abierta mirando a CHILI entrega, el HUD
-  enseña el gesto, la puerta abre y cierra por gesto, el arranque automático, el
-  final de los tres remedios y el apagón.
+  enseña el gesto, la puerta abre y cierra con la mano izquierda (y la derecha,
+  mirando la puerta, no la toca), el arranque automático, el final de los tres
+  remedios y el apagón.
 - **`dev/probe_surface.tscn`** mide la repisa con raycasts y avisa si un remedio
   quedó `FLOJA`, `HUNDIDA` o haciendo `PUENTE` sobre el hueco del lavabo.
 - **`dev/probe_deck.tscn`** mapea la mesada: qué tramos son planos. Se usó para
@@ -320,13 +326,17 @@ Lo que funciona hoy está verificado con las pruebas de la sección 8 y con el
 tracker `--fake` de punta a punta.
 
 Lo que falta o está flojo, ordenado por prioridad:
- **El desorden procedural está apagado** (`CLUTTER_COUNT = 0` en `room.gd`): el
-   baño quedó limpio. Si se quiere más caos, hay que revisar que no tape los
-   remedios ni la puerta.
- **No hay tests de UI ni de la escena completa**: `smoke` cubre las reglas, no
-   el dibujo.
- **La sensibilidad del gesto está calibrada a ojo.** `PALM_HOLD`, `FIST_HOLD` y
-   `GRAB_COOLDOWN` en `eye_input.gd` pueden necesitar ajuste con otras cámaras.
- **Los spawns están fijos.** Se eligen editando `main.gd` o
-   `user://positions.cfg`; 
+
+- **El zoom está apagado.** La mano izquierda ahora abre y cierra la puerta;
+  `GazeCamera.set_zoom()` queda en el código pero se llama con `held = false`.
+  Hay que arreglar el bug que tenía antes de volver a atarlo a un gesto.
+- **El desorden procedural está apagado** (`CLUTTER_COUNT = 0` en `room.gd`): el
+  baño quedó limpio. Si se quiere más caos, hay que revisar que no tape los
+  remedios ni la puerta.
+- **No hay tests de UI ni de la escena completa**: `smoke` cubre las reglas, no
+  el dibujo.
+- **La sensibilidad del gesto está calibrada a ojo.** `PALM_HOLD`, `FIST_HOLD` y
+  `GRAB_COOLDOWN` en `eye_input.gd` pueden necesitar ajuste con otras cámaras.
+- **Los spawns están fijos.** Se eligen editando `main.gd` o
+  `user://positions.cfg`.
 

@@ -195,10 +195,12 @@ El resto del juego **nunca** sabe de dónde viene el dato: lee `EyeInput.head`,
 - La confianza del reconocedor bajó a `0.3`.
 - **Derecha e izquierda se asignan por la posición en la imagen**, no por el
   `handedness` de MediaPipe, que se equivoca seguido.
+- Cada mano tiene un trabajo fijo: **la derecha agarra** los remedios y **la
+  izquierda abre y cierra la puerta**. Antes la izquierda era el zoom.
 
 ### 3.5 Protocolo UDP
 
-El formato es el mismo que antes (JSON por paquete a `127.0.0.1:4242`), con dos
+El formato es el mismo que antes (JSON por paquete a `127.0.0.1:4242`), con
 cambios de contenido:
 
 ```json
@@ -210,12 +212,15 @@ cambios de contenido:
   "blink_r": 0.05,
   "hand": true,
   "gesture": "Closed_Fist",
-  "zoom_hand": false,
-  "zoom_gesture": "None"
+  "left_hand": false,    // antes: zoom_hand
+  "left_gesture": "None" // antes: zoom_gesture
 }
 ```
 
 - `head_yaw` / `head_pitch` están en **grados**, no normalizados.
+- `gesture` es la mano derecha y `left_gesture` la izquierda. Los campos del zoom
+  se renombraron porque el zoom se apagó y la izquierda pasó a manejar la puerta
+  (ver 5.7). `hand_depth` se sigue mandando pero el juego lo ignora.
 - `"sin cara"` (`face: false`) ya no significa "ojos cerrados": son dos estados
   distintos y el juego los trata distinto.
 
@@ -281,9 +286,9 @@ cambios de contenido:
 | Mirar / girar | mover la cabeza |
 | Elegir un remedio | palma derecha abierta, apuntándolo con la mirada |
 | Agarrar | cerrar el puño después de la palma |
-| Entregar | abrir la mano mirando a CHILI con el remedio en la mano |
-| Abrir / cerrar la puerta | puño (cerrar) o palma (abrir) mirando la puerta |
-| Zoom | palma izquierda abierta |
+| Entregar | abrir la mano derecha mirando a CHILI con el remedio en la mano |
+| Abrir / cerrar la puerta | con la mano izquierda: puño (cerrar) o palma (abrir), mirando la puerta |
+| Zoom | apagado por ahora (ver 5.7) |
 | Arrancar | ponerse frente a la cámara: calibra sola |
 
 Se eliminó por completo: `E`, `WASD`, `P`, `C`, `Esc`, `Enter`, `F1`, `F2`, el
@@ -319,13 +324,16 @@ mouse y la bandera `--mouse`. **No queda ninguna tecla en el juego.**
 - Cerrada queda alineada con la pared (`DOOR_CLOSED_YAW = 0`) y abierta gira 90°
   hacia el pasillo (`DOOR_OPEN_YAW = 90`).
 - Abrirla o cerrarla cuesta energía: es la mecánica que lleva al apagón.
+- La maneja **la mano izquierda**: puño para cerrar, palma para abrir, siempre
+  mirándola. La derecha queda libre para los remedios.
 
 ### 5.5 CHILI
 
 - Vive en el pasillo, del otro lado de la puerta, y **aparece** cada tanto.
 - Se apoya en el piso real (`FLOOR_Y = -0.49`), no en la altura de los ojos.
 - Se deteriora solo (`gravity`) y mejora con cada remedio entregado.
-- Mirarlo contagia; mirarlo con zoom contagia más.
+- Mirarlo contagia; con el zoom prendido contagiaba más (hoy el zoom está
+  apagado, ver 5.7).
 
 ### 5.6 Los spawns
 
@@ -334,6 +342,33 @@ mouse y la bandera `--mouse`. **No queda ninguna tecla en el juego.**
   quedaron fijos en `main.gd`.
 - Al arrancar, el rumbo de la cabeza se calcula desde el spawn hacia la puerta,
   así no hay que torcer el cuello para encontrarla.
+
+### 5.7 Reparto de manos y zoom apagado
+
+Último cambio, después de probar con cámara real:
+
+- **La mano derecha agarra y la izquierda abre y cierra la puerta.** Antes las
+  dos cosas salían de la mano derecha (la izquierda era el zoom), así que uno
+  podía cerrar la puerta sin querer mientras buscaba un remedio. Ahora cada mano
+  tiene un solo trabajo.
+- **El zoom quedó apagado**: la mano izquierda abierta cambiaba el campo visual y
+  eso arrastraba bugs (el giro se sentía distinto según el zoom, la imagen se
+  cerraba de más). El código sigue ahí (`GazeCamera.set_zoom`) pero `main.gd` lo
+  llama con `held = false`, así que nunca se activa. `contagion_zoom_bonus`
+  tampoco se aplica mientras tanto.
+- Los campos del protocolo se renombraron: `zoom_hand` → `left_hand` y
+  `zoom_gesture` → `left_gesture`. Se llama `left_*` y no `door_*` porque es la
+  mano, no la acción: si mañana la izquierda vuelve a hacer otra cosa, el nombre
+  sigue sirviendo.
+- `hand_depth` sigue viajando en el paquete, pero el juego ya no lo usa: era el
+  tamaño de la mano izquierda para el zoom.
+- El HUD de la puerta ahora dice "palma izquierda" / "puño izquierdo", y el
+  depuración muestra qué gesto ve en cada mano.
+- `dev/smoke` prueba las dos cosas: la izquierda abre y cierra la puerta, y la
+  derecha **no** la toca aunque mire la puerta.
+
+Archivos: `tracker/tracker.py`, `game/src/input/eye_input.gd`,
+`game/src/game/main.gd`, `game/dev/smoke.gd`.
 
 ---
 
@@ -464,7 +499,7 @@ Para que no queden dudas de qué ya no existe:
 
 ## 10. Historial completo, commit por commit
 
-41 commits después del original. Los mensajes están en español y en imperativo:
+50 commits después del original. Los mensajes están en español y en imperativo:
 qué hace el commit, no qué "se estuvo trabajando".
 
 | # | Commit | Qué cambió |
@@ -511,6 +546,15 @@ qué hace el commit, no qué "se estuvo trabajando".
 | 39 | `e528ef5` | Escribe este documento (`CAMBIOS.md`) y lo enlaza desde el README. |
 | 40 | `fea7a0d` | Saca un acento roto del mensaje de `_find-godot.bat` (cmd.exe lo mostraba como símbolo raro). |
 | 41 | `a411992` | Pasa a enlaces absolutos los enlaces a la rama legacy, que se rompían con la barra en el nombre. |
+| 42 | `0f2e440` | Suma al historial los commits de documentación. |
+| 43 | `2099227` | Evita que Git convierta los `.import` a CRLF. |
+| 44 | `27100ae` | Explica en el README cómo abrir el juego sin los atajos de Windows. |
+| 45 | `3aa4319` | Ajustes del README hechos directo desde GitHub. |
+| 46 | `5c80658` | Reescribe el README como guía de trabajo del equipo. |
+| 47 | `faca32b` | Aclara el consumo de energía de la puerta y saca un acento del `.bat`. |
+| 48 | `794bc00` | Saca la nota de licencia de los créditos del README. |
+| 49 | `2987097` | Recorta la lista de pendientes del README. |
+| 50 | `6e5f6a5` | La mano izquierda maneja la puerta, la derecha agarra y el zoom queda apagado (ver 5.7). |
 
 Los commits 28 a 34 fueron de exploración con las teclas: sirvieron para elegir
 la posición del jugador, la de CHILI y la de los remedios. En el commit 38 se
