@@ -5,9 +5,8 @@ levantar una pata. CHILI, el bicho, se está muriendo en el piso de enfrente: ha
 que mirarlo de cerca para ver el detalle, agarrar los tres remedios y
 entregárselos. Pero mirarlo fascina, y fascinarse contagia.
 
-Se juega **con los ojos y las manos**, sin mouse ni teclado: una cámara lee
-hacia dónde mirás y qué hacen tus manos. Si no hay cámara, hay un modo mouse
-para poder jugarlo y grabarlo igual.
+Se juega **con los ojos y las manos**: una cámara lee hacia dónde mirás y qué
+hacen tus manos. No hay mouse ni teclado. Sin cámara no hay juego.
 
 ## Estructura
 
@@ -18,7 +17,6 @@ game/                  Proyecto Godot 4.6 (abrí esta carpeta)
     input/             De dónde viene la entrada
       eye_input.gd     Autoload: única fuente de entrada del juego
       udp_tracker.gd   Escucha los paquetes de Python
-      mouse_input.gd   Reemplazo con mouse y teclado
     game/
       main.gd          Orquestador: reglas, estados y finales
       gaze_camera.gd   La cabeza de Kaiser (mirada, giro de 360°, zoom)
@@ -93,27 +91,21 @@ sin decir nada.
 
 ### Controles
 
-| Acción | Con cámara | Con mouse |
-| --- | --- | --- |
-| Mirar / girar la cabeza | girar la cabeza | mover el mouse |
-| Elegir un remedio | palma derecha abierta | click derecho |
-| Agarrar | puño después de la palma | `E` o click izquierdo |
-| Entregar | abrir la mano mirando a CHILI | `E` mirando a CHILI |
-| Abrir / cerrar la puerta | puño o palma mirando la puerta | `E` mirando la puerta |
-| Zoom | palma izquierda abierta | `Ctrl` |
-| Calibrar | `Enter` | `Enter` |
-| Mostrar datos | `F1` | `F1` |
-| Cambiar cámara/mouse | `F2` | `F2` |
-| Mover al personaje (temporal) | `W` `A` `S` `D` | `W` `A` `S` `D` |
-| Guardar spawn del jugador | `P` | `P` |
-| Guardar spawn de CHILI | `C` | `C` |
-| Soltar el mouse / salir | — | `Esc` |
+Todo se juega con la cámara. No hay teclado ni mouse: si el tracker no está
+mandando datos, el juego no tiene entrada.
 
-`E` es la mano de emergencia: hace lo mismo que el gesto, pero sin cámara. Si
-llevás algo y mirás a CHILI, se lo da; si mirás un remedio, lo agarra; si mirás
-la puerta, la abre o la cierra.
+| Acción | Gesto |
+| --- | --- |
+| Mirar / girar la cabeza | girar la cabeza (llegar al borde gira el cuerpo) |
+| Elegir un remedio | palma derecha abierta, apuntándolo con la mirada |
+| Agarrar | cerrar el puño después de la palma |
+| Entregar | abrir la mano mirando a CHILI con el remedio en la mano |
+| Abrir / cerrar la puerta | palma o puño mirando la puerta |
+| Zoom | palma izquierda abierta |
+| Arrancar | ponerse frente a la cámara: espera sola y calibra |
 
-El juego arranca con `Enter`: poné la cabeza mirando al frente y confirmá el cero.
+El brillo de cada remedio dice si ya podés agarrarlo: al máximo, la palma ya
+lleva el tiempo suficiente y el puño agarra.
 
 Al arrancar, la cabeza queda mirando a la puerta. El rumbo se calcula desde el
 spawn del jugador, así no hay que torcer el cuello para encontrarla.
@@ -121,23 +113,21 @@ spawn del jugador, así no hay que torcer el cuello para encontrarla.
 ### Dónde arranca cada cosa
 
 Los dos spawn viven en `user://positions.cfg` (en Windows,
-`%APPDATA%\Godot\app_userdata\CHILI\positions.cfg`) y se eligen en caliente:
-caminar con `WASD`, apretar `P` para marcar dónde aparece el jugador y `C` para
-marcar dónde aparece CHILI (se apoya en el piso, no en la altura de los ojos).
-Si el archivo no existe, se usan los valores por defecto de `main.gd`.
+`%APPDATA%\Godot\app_userdata\CHILI\positions.cfg`) y quedaron fijos con los
+valores que se eligieron caminando por el mapa durante el desarrollo. Si el
+archivo no existe, se usan los valores por defecto de `main.gd`.
 
 Los tres remedios están apoyados sobre la repisa del lavabo, dentro del baño y a
 la vista desde el spawn. La altura sale de `DECK_Y` en `main.gd`: si alguien
 mueve un objeto, `dev/probe_surface.tscn` avisa si quedó flotando.
 
-Si no llega ningún paquete en 3 segundos, pasa solo a mouse y teclado. Si el
-tracker arranca después, vuelve a la cámara sin que hagas nada.
+Si no llega ningún paquete, el juego se queda esperando la cámara: no hay modo
+alternativo. Cuando el tracker vuelve, la entrada vuelve sola.
 
 ### Banderas
 
 ```bash
-godot --path game -- --mouse     # forzar el modo mouse
-godot --path game -- --auto      # arrancar sin Enter (para grabar)
+godot --path game -- --auto      # arrancar sin esperar la calibración
 python tracker/tracker.py --no-preview     # sin ventana de cámara
 python tracker/tracker.py --fake           # datos sintéticos, sin cámara
 python tracker/tracker.py --help
@@ -173,7 +163,8 @@ El tracker manda un JSON por paquete UDP a `127.0.0.1:4242`:
 - Si `face` es `false`, el resto de los campos de la cara no vienen. Eso es "sin
   cámara", que no es lo mismo que "ojos cerrados".
 
-Para probar el juego sin Python alcanza con `--mouse`: no necesita el protocolo.
+Para probar el juego sin cámara está `python tracker/tracker.py --fake`: manda
+datos sintéticos por el mismo protocolo, sin abrir la webcam.
 
 ## Cómo se gana
 

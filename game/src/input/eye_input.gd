@@ -1,12 +1,10 @@
 extends Node
 ## Autoload "EyeInput": la única fuente de entrada del juego.
 ##
-## Junta dos orígenes posibles y los expone igual:
-##   - CAMERA: los paquetes UDP que manda tracker.py con la cabeza y las manos.
-##   - MOUSE: mouse y teclado, para jugar cuando no hay cámara.
-##
-## El resto del juego nunca consulta el origen, solo lee [member head],
-## [member hand], [member zoom_hand] y escucha [signal grab].
+## Lee los paquetes UDP que manda tracker.py y los expone como cabeza y manos.
+## No hay teclado ni mouse: si no hay cámara, no hay entrada. El resto del juego
+## nunca sabe de dónde viene el dato, solo lee [member head], [member hand],
+## [member zoom_hand] y escucha [signal grab].
 ##
 ## El parpadeo y el estado "ojos cerrados" son cosas distintas a propósito:
 ## [member blink] es el párpado (visual, dura un instante) y
@@ -14,15 +12,10 @@ extends Node
 ## Un parpadeo normal no llega a penalizar nada.
 
 signal grab
-signal source_changed
-
-enum Source { CAMERA, MOUSE }
 
 const PORT := 4242
 ## Segundos sin paquetes antes de dar la lectura por perdida.
 const STALE_AFTER := 1.0
-## Segundos sin cámara antes de pasar solo a mouse y teclado.
-const FALLBACK_AFTER := 3.0
 ## Qué tan rápido alcanza la pose su valor nuevo (más alto, más seco).
 const HEAD_SMOOTHING := 8.0
 ## Lo mismo para los párpados: más rápido, porque un parpadeo dura poco.
@@ -36,8 +29,6 @@ const TRACKING_GRACE := 0.4
 const PALM_HOLD := 0.15
 const FIST_HOLD := 0.05
 const GRAB_COOLDOWN := 0.5
-
-var source := Source.CAMERA
 
 ## Hay una cara en cámara: hay lectura de cabeza confiable.
 var tracking := false
@@ -70,7 +61,6 @@ var hand_depth := 0.0
 var palm_ready := false
 
 var _udp := UdpTracker.new()
-var _mouse := MouseInput.new()
 var _time := 0.0
 var _last_frame_at := 0.0
 var _palm_time := 0.0
@@ -85,8 +75,6 @@ func _ready() -> void:
 	process_priority = -100
 	if _udp.open(PORT) != OK:
 		push_warning("EyeInput: no pude escuchar el puerto %d." % PORT)
-	if Cli.has_flag("--mouse"):
-		set_source(Source.MOUSE)
 
 
 func _process(delta: float) -> void:
@@ -96,63 +84,19 @@ func _process(delta: float) -> void:
 	if not frame.is_empty():
 		_last_frame_at = _time
 		_ingest(frame, delta)
-		# Si volvieron los paquetes, la cámara manda otra vez.
-		if source != Source.CAMERA:
-			set_source(Source.CAMERA)
-	elif source == Source.CAMERA:
-		_watch_for_stall(delta)
 	else:
-		_ingest(_mouse.read(get_viewport()), delta)
+		_watch_for_stall(delta)
 
 	_update_grab(delta)
 
 
-## Cambiar entre cámara y mouse en caliente (F2).
-func toggle_source() -> void:
-	set_source(Source.MOUSE if source == Source.CAMERA else Source.CAMERA)
-
-
-func set_source(new_source: Source) -> void:
-	if new_source == source:
-		return
-	source = new_source
-	_last_frame_at = _time if new_source == Source.CAMERA else -1000.0
-	tracking = new_source == Source.MOUSE
-	_raw_tracking = tracking
-	_tracking_missing = 0.0
-	head = Vector2.ZERO
-	blink_l = 0.0
-	blink_r = 0.0
-	blink = 0.0
-	eyes_closed_time = 0.0
-	hand = false
-	gesture = "None"
-	zoom_hand = false
-	zoom_gesture = "None"
-	hand_depth = 0.0
-	palm_ready = false
-	_fist_time = 0.0
-	_cooldown = 0.0
-	_armed = true
-	# Sin cámara no hay cabeza que seguir: el mouse pasa a manejar la mirada y
-	# se captura para que no se escape del borde de la ventana.
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if new_source == Source.MOUSE \
-		else Input.MOUSE_MODE_VISIBLE
-	print("[EyeInput] entrada: %s" % ("cámara" if new_source == Source.CAMERA else "mouse"))
-	source_changed.emit()
-
-
-## Con cámara, una mano abierta delante de la cara ensucia la lectura de mirada.
-## Con mouse no existe ese problema: el control es el mouse mismo.
+## Con una mano abierta delante de la cara la lectura de mirada se ensucia.
 func hand_obstructs() -> bool:
-	return source == Source.CAMERA and hand and gesture != "Closed_Fist"
+	return hand and gesture != "Closed_Fist"
 
 
-func uses_camera() -> bool:
-	return source == Source.CAMERA
-
-
-## Calibra el parpadeo con los ojos abiertos del usuario. Se llama en Enter.
+## Calibra el parpadeo con los ojos abiertos del usuario. La llama el juego solo,
+## al arrancar, después de tener unos segundos de lectura estable.
 func calibrate_blink() -> void:
 	# Solo calibrar si los ojos parecen abiertos (blink < 0.3).
 	if blink_l < 0.3 and blink_r < 0.3:
@@ -224,10 +168,7 @@ func _release_eyes(delta: float) -> void:
 
 func _watch_for_stall(delta: float) -> void:
 	var silent := _time - _last_frame_at
-	if silent > FALLBACK_AFTER:
-		push_warning("EyeInput: sin datos de la cámara, paso a mouse y teclado.")
-		set_source(Source.MOUSE)
-	elif silent > STALE_AFTER:
+	if silent > STALE_AFTER:
 		# Se cortó el paquete: no nos quedamos con la última pose congelada.
 		_raw_tracking = false
 		_tracking_missing += delta

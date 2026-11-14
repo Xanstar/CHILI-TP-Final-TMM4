@@ -45,9 +45,12 @@ const REMEDIES := [
 ]
 
 const ENDING_DELAY := 10.0
+## Segundos con la cara detectada antes de arrancar solos. No hay tecla de
+## inicio: si no, el juego podría quedarse esperando algo que nadie va a tocar.
+const AUTO_START_AFTER := 1.2
 
-## Spawn por defecto: los eligió el jugador caminando por el mapa y apretando
-## P (jugador) y C (CHILI). Se pueden pisar con `user://positions.cfg`.
+## Spawn por defecto: los eligió el jugador caminando por el mapa en una versión
+## anterior. Se pueden pisar con `user://positions.cfg`.
 const DEFAULT_PLAYER_POS := Vector3(0.115139, 0.65, -1.574154)
 const DEFAULT_CHILI_POS := Vector3(-0.65542, 0.65, 2.147936)
 ## Altura del piso del baño en coordenadas del mundo: CHILI se apoya acá.
@@ -159,16 +162,13 @@ var _door_time := 0.0
 var _bait := 0.0
 var _bait_at := 2.0
 var _flash := 0.0
-var _p_pressed := false
-var _c_pressed := false
 var _saved_player_pos := DEFAULT_PLAYER_POS
 var _saved_chili_pos := DEFAULT_CHILI_POS
 ## Rumbo con el que arranca la cabeza: mirando a la puerta.
 var _spawn_heading := 0.0
 var _time := 0.0
-## Se descarta el primer movimiento del mouse después de capturarlo: el salto
-## inicial es enorme y marea.
-var _skip_motion := false
+## Tiempo con la cara a la vista, para el arranque automático.
+var _start_timer := 0.0
 ## Pose de la cabeza con la que se calibró, en grados.
 var _head_offset := Vector2.ZERO
 
@@ -185,8 +185,6 @@ func _ready() -> void:
 	hud.show_hint(_start_hint())
 
 	EyeInput.grab.connect(_on_grab)
-	EyeInput.source_changed.connect(_on_source_changed)
-	camera.set_free_look(not EyeInput.uses_camera())
 
 	# CHILI empieza visible en la puerta por unos segundos.
 	chili.visible = true
@@ -195,7 +193,7 @@ func _ready() -> void:
 	_chili_stay_timer = 0.0
 	_chili_next_appear = 0.0
 
-	# Arranque sin Enter: solo para pruebas headless y para grabar la demo.
+	# Arranque inmediato: solo para pruebas headless y para grabar la demo.
 	if Cli.has_flag("--auto"):
 		_calibrate()
 
@@ -204,94 +202,33 @@ func _process(delta: float) -> void:
 	_time += delta
 	_update_camera(delta)
 	_update_focus(delta)
-	# Si el jugador no calibra a mano, lo hacemos solos después de un par de
-	# segundos con la cabeza quieta: el juego no debería quedar muerto.
-	if not running and not finished and EyeInput.tracking and _time > 2.0:
-		_calibrate()
+	# No hay tecla para calibrar: el juego lo hace solo cuando ve una cara
+	# estable. Así nadie queda trabado esperando una instrucción.
+	if not running and not finished and EyeInput.tracking:
+		_start_timer += delta
+		if _start_timer > AUTO_START_AFTER:
+			_calibrate()
 	if running and not finished:
 		_update_rules(delta)
 	_update_views(delta)
 	_update_hud()
 	_update_door_toggle(delta)
-	_update_movement(delta)
-	# Tecla P: guardar posición del jugador (spawn).
-	if Input.is_key_pressed(KEY_P) and not _p_pressed:
-		_p_pressed = true
-		_saved_player_pos = camera.global_position
-		_save_positions()
-		print("[POS] jugador guardado:", _saved_player_pos)
-	if not Input.is_key_pressed(KEY_P):
-		_p_pressed = false
-	# Tecla C: guardar posición de CHILI (se apoya en el piso, no en los ojos).
-	if Input.is_key_pressed(KEY_C) and not _c_pressed:
-		_c_pressed = true
-		_saved_chili_pos = Vector3(camera.global_position.x, FLOOR_Y, camera.global_position.z)
-		_save_positions()
-		chili.visible = true
-		_place_chili()
-		print("[POS] chili guardado:", _saved_chili_pos)
-	if not Input.is_key_pressed(KEY_C):
-		_c_pressed = false
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept"):
-		_calibrate()
-		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_F1:
-				hud.toggle_debug()
-			KEY_F2:
-				EyeInput.toggle_source()
-			KEY_E:
-				_interact()
-			KEY_ESCAPE:
-				# Primero suelta el mouse; si ya está suelto, sale del juego.
-				if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-				else:
-					get_tree().quit()
-
-
-## Modo sin cámara: el mouse gira la cabeza. Solo se usa cuando no hay tracker.
-func _input(event: InputEvent) -> void:
-	if EyeInput.uses_camera():
-		return
-	if event is InputEventMouseMotion:
-		if _skip_motion:
-			_skip_motion = false
-			return
-		camera.look(event.relative)
-	elif event is InputEventMouseButton and event.pressed:
-		# Un click dentro de la ventana vuelve a capturar el mouse.
-		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-			_skip_motion = true
 
 
 # ============================================================
 #  ENTRADA
 # ============================================================
 
-## Mirar al centro y apretar Enter: fija el cero de la cabeza y vuelve al frente.
+## Fija el cero de la cabeza y vuelve a mirar al frente. Se llama solo, cuando
+## hay cara estable: no hay tecla ni espera.
 func _calibrate() -> void:
 	_head_offset = EyeInput.head
 	EyeInput.calibrate_blink()
-	# Con mouse no hay cero que fijar: la mirada se queda donde está.
-	if EyeInput.uses_camera():
-		camera.recenter(_spawn_heading)
+	camera.recenter(_spawn_heading)
 	if not running:
 		running = true
 		hud.hide_hint()
 	print("[Main] calibrado: ", _head_offset)
-
-
-func _on_source_changed() -> void:
-	camera.set_free_look(not EyeInput.uses_camera())
-	_skip_motion = true
-	if not running:
-		hud.show_hint(_start_hint())
 
 
 ## El gesto lo detecta EyeInput: palma abierta y después puño, con la mano derecha.
@@ -333,34 +270,12 @@ func _update_door_toggle(delta: float) -> void:
 		_toggle_door()
 
 
-## Abre o cierra la puerta. La usan el gesto de la mano y la tecla E.
+## Abre o cierra la puerta. La dispara el gesto de la mano mirando la puerta.
 func _toggle_door() -> void:
 	door_closed = not door_closed
 	room.set_door_closed(door_closed)
 	_door_toggle_cooldown = 0.5
 	_notify("Puerta cerrada" if door_closed else "Puerta abierta")
-
-
-## Una sola tecla para jugar sin cámara: agarra el remedio que estás mirando,
-## se lo da a CHILI si lo estás mirando, o abre/cierra la puerta.
-func _interact() -> void:
-	if not running or finished or _ending_queued:
-		return
-	if carried != null:
-		if focus == Focus.CHILI or _time_without_chili < chili_memory:
-			_cure_chili()
-		else:
-			_notify("Mirá a CHILI para darle el remedio")
-		return
-	# Un remedio en la mira gana sobre la puerta: si no, cerrar la puerta desde
-	# lejos robaría el agarre.
-	if looked_remedy != null or targeted_remedy != null:
-		_on_grab()
-		return
-	if room.glb_door != null and _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0:
-		_toggle_door()
-		return
-	_on_grab()
 
 
 func _set_lights(on: bool) -> void:
@@ -391,14 +306,9 @@ func _toggle_lights_recursive(node: Node, on: bool) -> void:
 
 
 func _update_camera(delta: float) -> void:
-	if not EyeInput.uses_camera():
-		# Sin cámara la mirada la maneja el mouse (ver _input).
-		return
-	var obstructed := EyeInput.hand_obstructs() or (
-		EyeInput.uses_camera() and EyeInput.zoom_hand)
+	var obstructed := EyeInput.hand_obstructs() or EyeInput.zoom_hand
 	var can_look := EyeInput.tracking and not obstructed
-	var can_turn := can_look \
-		and not (EyeInput.uses_camera() and EyeInput.hand and carried == null)
+	var can_turn := can_look and not (EyeInput.hand and carried == null)
 	camera.follow(EyeInput.head - _head_offset, can_look, can_turn, delta)
 
 
@@ -556,35 +466,6 @@ func _finish_later(kind: StringName, delay: float) -> void:
 
 
 # ============================================================
-#  MOVIMIENTO WASD (temporal, para calibrar posiciones)
-# ============================================================
-
-var _move_speed := 3.0
-
-func _update_movement(delta: float) -> void:
-	var input := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W):
-		input.z -= 1.0
-	if Input.is_key_pressed(KEY_S):
-		input.z += 1.0
-	if Input.is_key_pressed(KEY_A):
-		input.x -= 1.0
-	if Input.is_key_pressed(KEY_D):
-		input.x += 1.0
-	if input.length() > 0.0:
-		input = input.normalized()
-		var forward := -camera.global_transform.basis.z
-		forward.y = 0.0
-		forward = forward.normalized()
-		var right := camera.global_transform.basis.x
-		right.y = 0.0
-		right = right.normalized()
-		var movement := (forward * -input.z + right * input.x) * _move_speed * delta
-		camera.position += movement
-		camera.position.y = 0.65
-
-
-# ============================================================
 #  VISTAS (empujar el estado a la escena)
 # ============================================================
 
@@ -632,13 +513,12 @@ func _update_views(delta: float) -> void:
 
 
 func _highlight_for(remedy: Pickup) -> float:
-	# Sin cámara se agarra con E, así que no hay gesto que esperar: si está en
-	# la mira, ya se puede levantar.
-	var ready := EyeInput.palm_ready or not EyeInput.uses_camera()
+	# Sin palma abierta no hay nada que esperar: el brillo máximo es la señal
+	# de "ya podés cerrar el puño".
+	var ready := EyeInput.palm_ready
 	if remedy.state == Pickup.State.HAND:
 		return 0.8
 	if remedy == looked_remedy:
-		# El brillo máximo es la señal de "ahora podés agarrarlo".
 		return 3.0 if ready else 1.6
 	if remedy == targeted_remedy:
 		# En la mira: se ve que está disponible, aunque no esté centrado.
@@ -668,21 +548,19 @@ func _status_text() -> String:
 	return ""
 
 
-## Lo que dice el HUD según lo que tenés delante. Respeta el mismo orden que
-## `_interact`, así el cartel nunca promete algo distinto de lo que hace la tecla.
+## Lo que dice el HUD según lo que tenés delante. Todo se hace con gestos, así
+## que el cartel enseña el gesto y no una tecla.
 func _target_text() -> String:
 	if not running or finished:
 		return ""
-	var action := "E o puño" if EyeInput.uses_camera() else "E"
 	if carried != null:
-		return "llevás %s — mirá a CHILI y apretá %s" % [carried.item_name, action]
+		return "llevás %s — mirá a CHILI y abrí la mano" % carried.item_name
 	if looked_remedy != null:
-		return "%s — %s para agarrar" % [looked_remedy.item_name, action]
+		return "%s — palma abierta y puño" % looked_remedy.item_name
 	if targeted_remedy != null:
-		return "%s — apretá %s para agarrar" % [targeted_remedy.item_name, action]
+		return "%s — palma abierta y puño" % targeted_remedy.item_name
 	if room.glb_door != null and _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0:
-		return ("puerta cerrada — %s para abrir" % action) if door_closed \
-			else ("puerta abierta — %s para cerrar" % action)
+		return "puerta cerrada — palma abierta" if door_closed else "puerta abierta — puño"
 	return ""
 
 
@@ -701,15 +579,14 @@ func _debug_text() -> String:
 	var palm_text := " (lista)" if EyeInput.palm_ready else ""
 	var zoom_text := EyeInput.zoom_gesture if EyeInput.zoom_hand else "ninguna"
 	var carried_text := carried.item_name if carried != null else "-"
-	var source_text := "cámara" if EyeInput.uses_camera() else "mouse"
 	return """cabeza: %+.1f° %+.1f°   párpados: %.2f/%.2f   ojos cerrados: %.1fs
-entrada: %s   foco: %s   rumbo: %d°
+foco: %s   rumbo: %d°   cámara: %s
 mano der: %s%s   mano izq: %s   zoom: %.2f
 fascinación: %.2f   contagio: %.2f
-gravedad CHILI: %.2f   entregados: %d/%d   en la mano: %s
-[Enter] recalibrar   [F1] ocultar esto   [F2] cámara/mouse""" % [
+gravedad CHILI: %.2f   entregados: %d/%d   en la mano: %s""" % [
 		head.x, head.y, EyeInput.blink_l, EyeInput.blink_r, EyeInput.eyes_closed_time,
-		source_text, Focus.keys()[focus], camera.heading_degrees(),
+		Focus.keys()[focus], camera.heading_degrees(),
+		"leyendo" if EyeInput.tracking else "sin lectura",
 		hand_text, palm_text, zoom_text, zoom,
 		fascination, contagion,
 		gravity, delivered, remedies.size(), carried_text,
@@ -779,11 +656,10 @@ func _first_available(candidate: Pickup) -> Pickup:
 	return candidate if candidate != null and candidate.is_available() else null
 
 
+## El cartel de arranque. No hay tecla: cuando la cámara ve una cara, el juego
+## se calibra solo. El texto solo pide lo único que hace falta.
 func _start_hint() -> String:
-	if EyeInput.uses_camera():
-		return "Poné la cabeza mirando al frente\ny apretá ENTER para empezar"
-	return "Mové el mouse para mirar\ny apretá ENTER para empezar\n" \
-		+ "E agarra, entrega y abre la puerta"
+	return "Ponete frente a la cámara\ny mirá al frente"
 
 
 ## Nada de esto se muestra en pantalla: es para depurar en la consola.
@@ -791,20 +667,9 @@ func _notify(text: String) -> void:
 	print("[Main] ", text)
 
 
-## Guarda las posiciones elegidas por el jugador en un archivo.
-func _save_positions() -> void:
-	var file := FileAccess.open(CONFIG_PATH, FileAccess.WRITE)
-	if file == null:
-		push_warning("No pude guardar posiciones")
-		return
-	file.store_line("player=%s" % _saved_player_pos)
-	file.store_line("chili=%s" % _saved_chili_pos)
-	file.close()
-	print("[POS] guardado en ", CONFIG_PATH)
-
-
-## Lee los spawn guardados con P y C. Si el archivo no existe, quedan los
-## valores por defecto: el juego nunca arranca sin posiciones.
+## Lee los spawn guardados. Si el archivo no existe, quedan los valores por
+## defecto: el juego nunca arranca sin posiciones. Los lugares los eligió el
+## jugador con las teclas P y C en una versión anterior, y quedaron fijos.
 func _load_positions() -> void:
 	var file := FileAccess.open(CONFIG_PATH, FileAccess.READ)
 	if file == null:

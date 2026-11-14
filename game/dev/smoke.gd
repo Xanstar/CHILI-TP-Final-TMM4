@@ -2,8 +2,8 @@ extends Node
 ## Prueba de humo, sin ventana.
 ##
 ## Levanta la escena real y ejercita el ciclo de un remedio: agarrar, dejar,
-## agarrar y entregar. Sirve para verificar que el refactor no rompió nada antes
-## de abrir el editor.
+## agarrar y entregar. Todo por gesto, porque el juego ya no tiene teclado ni
+## mouse: se le inyectan paquetes a EyeInput como si vinieran del tracker.
 ##
 ##     godot --headless res://dev/smoke.tscn
 
@@ -23,15 +23,15 @@ func _ready() -> void:
 	_expect(game.remedies.size() == 3, "hay 3 remedios")
 	_expect(remedy.state == Pickup.State.ROOM, "el remedio arranca en el cuarto")
 
-	# Agarrar mirándolo.
+	# Agarrar mirándolo: palma abierta y puño, el gesto real.
 	game.looked_remedy = remedy
-	game.call("_on_grab")
-	_expect(game.carried == remedy, "agarró el remedio mirado")
+	_grab_gesture(game)
+	_expect(game.carried == remedy, "el gesto agarró el remedio mirado")
 	_expect(remedy.state == Pickup.State.HAND, "el remedio está en la mano")
 	_expect(remedy.get_parent() == game.camera, "el remedio cuelga de la cámara")
 
 	# No se puede llevar dos cosas.
-	game.call("_on_grab")
+	_grab_gesture(game)
 	_expect(game.carried == remedy, "no agarra un segundo remedio")
 
 	# Soltarlo lo devuelve a su lugar.
@@ -40,42 +40,40 @@ func _ready() -> void:
 	_expect(remedy.state == Pickup.State.ROOM, "el remedio volvió al cuarto")
 	_expect(remedy.position.is_equal_approx(remedy.home), "volvió a su posición")
 
-	# Entregarlo lo saca del mundo y cura.
+	# Entregarlo lo saca del mundo y cura: mano abierta mirando a CHILI.
 	var gravity_before: float = game.gravity
 	game.looked_remedy = remedy
-	game.call("_on_grab")
-	game.call("_cure_chili")
+	_grab_gesture(game)
+	_deliver_gesture(game)
 	_expect(game.delivered == 1, "cuenta la entrega")
 	_expect(remedy.state == Pickup.State.DELIVERED, "el remedio quedó entregado")
 	_expect(not remedy.visible, "el remedio entregado no se ve")
 	_expect(game.gravity < gravity_before, "entregar baja la gravedad")
 
-	# La tecla E hace lo mismo que el gesto, sin cámara.
-	var second: Pickup = game.remedies[1]
-	game.looked_remedy = second
-	game.call("_interact")
-	_expect(game.carried == second, "la tecla E agarra el remedio mirado")
-
-	# El HUD tiene que decir lo mismo que hace la tecla: primero lo que llevás,
-	# después el remedio, y recién al final la puerta.
-	game.call("_drop")
+	# El HUD tiene que enseñar el gesto, no una tecla.
 	_expect("llevás" not in game.call("_target_text"), "sin nada en la mano no habla de llevás")
 	var third: Pickup = game.remedies[2]
 	game.looked_remedy = third
-	_expect("para agarrar" in game.call("_target_text"), "el HUD avisa que E agarra")
+	_expect("palma" in game.call("_target_text"), "el HUD enseña el gesto de agarrar")
 	_expect(third.item_name in game.call("_target_text"), "el HUD nombra el remedio")
 	game.looked_remedy = null
 	game.targeted_remedy = null
 	_expect("puerta" in game.call("_target_text"), "el HUD avisa de la puerta")
 
-	# El botón de la puerta se prueba al final: cambia el estado del juego.
+	# La puerta se abre y se cierra con la mano, mirándola.
 	game.carried = null
 	game.looked_remedy = null
 	game.targeted_remedy = null
 	var was_closed: bool = game.door_closed
-	game.call("_interact")
-	_expect(game.door_closed != was_closed, "la tecla E abre o cierra la puerta")
+	_door_gesture(game, was_closed)
+	_expect(game.door_closed != was_closed, "el gesto abre o cierra la puerta")
 
+	# Un solo juego escuchando la entrada: si quedan dos, los gestos se
+	# duplican y las pruebas siguientes mienten.
+	game.queue_free()
+	await get_tree().process_frame
+
+	await _check_autostart()
 	await _check_win_ending()
 	await _check_blackout_ending()
 
@@ -83,21 +81,77 @@ func _ready() -> void:
 	get_tree().quit(0 if _failures == 0 else 1)
 
 
+# ============================================================
+#  GESTOS
+# ============================================================
+
+## Palma abierta el tiempo suficiente y después puño: es lo que detecta
+## EyeInput y lo que dispara el agarre en el juego.
+func _grab_gesture(game: Game) -> void:
+	EyeInput._ingest({"hand": true, "gesture": "Open_Palm"}, 1.0 / 60.0)
+	# 0.6 s de palma: pasa el tiempo de espera del gesto y también el enfriamiento
+	# entre agarres, que en la vida real transcurre solo.
+	EyeInput._update_grab(0.6)
+	EyeInput._ingest({"hand": true, "gesture": "Closed_Fist"}, 1.0 / 60.0)
+	EyeInput._update_grab(0.06)
+
+
+## Mano abierta mirando a CHILI con algo en la mano: el juego cura en la regla
+## 2b de `_update_rules`.
+func _deliver_gesture(game: Game) -> void:
+	game.focus = Game.Focus.CHILI
+	game._time_without_chili = 0.0
+	game._grabbed_at = -10.0
+	EyeInput._ingest({"hand": true, "gesture": "Open_Palm"}, 1.0 / 60.0)
+	EyeInput._update_grab(0.6)
+	game.call("_update_rules", 0.016)
+	EyeInput._ingest({"hand": false, "gesture": "None"}, 1.0 / 60.0)
+	EyeInput._update_grab(0.016)
+
+
+## Mira la puerta y hace el gesto que falta: puño si está abierta, palma si
+## está cerrada.
+func _door_gesture(game: Game, door_is_closed: bool) -> void:
+	var door := game.room.glb_door
+	var aim := door.global_position + Vector3(0.0, 1.0, 0.0)
+	game.camera.look_at(aim, Vector3.UP)
+	var gesture := "Open_Palm" if door_is_closed else "Closed_Fist"
+	EyeInput._ingest({"hand": true, "gesture": gesture}, 1.0 / 60.0)
+	game._door_toggle_cooldown = 0.0
+	game.call("_update_door_toggle", 0.016)
+	EyeInput._ingest({"hand": false, "gesture": "None"}, 1.0 / 60.0)
+
+
+# ============================================================
+#  FINALES
+# ============================================================
+
+## Sin tecla de inicio: cuando hay cara un rato, el juego arranca solo.
+func _check_autostart() -> void:
+	var game: Game = await _fresh_game(false)
+	_expect(not game.running, "el juego no arranca sin ver una cara")
+	EyeInput._ingest(_face_frame(0.0, 0.0), 1.0 / 60.0)
+	game.call("_process", Game.AUTO_START_AFTER + 0.1)
+	_expect(game.running, "con la cara a la vista el juego arranca solo")
+	game.queue_free()
+	await get_tree().process_frame
+
+
 ## Entregar los tres remedios cierra la partida, como antes del refactor.
-## Se entregan por la vía real (E para agarrar, E para entregar), no tocando el
-## contador a mano.
+## Se entregan por el gesto real, no tocando el contador a mano.
 func _check_win_ending() -> void:
 	var game: Game = await _fresh_game()
 	for remedy: Pickup in game.remedies:
 		game.looked_remedy = remedy
-		game.call("_interact")
-		_expect(game.carried == remedy, "E agarra el %s" % remedy.item_name)
-		game.focus = Game.Focus.CHILI
-		game.call("_interact")
+		_grab_gesture(game)
+		_expect(game.carried == remedy, "el gesto agarra el %s" % remedy.item_name)
+		_deliver_gesture(game)
 	_expect(game.delivered == game.remedies.size(), "se entregaron los tres")
 	game.call("_update_rules", 0.016)
 	_expect(game.finished, "entregar los tres remedios termina la partida")
 	_expect(game.ending == &"ayuda", "el final de los tres remedios es 'ayuda'")
+	game.queue_free()
+	await get_tree().process_frame
 
 
 ## El apagón no termina en negro: vuelve la luz, CHILI aparece delante del
@@ -127,13 +181,15 @@ func _check_blackout_ending() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_expect(game.ending == &"oscuridad", "el apagón termina en 'oscuridad'")
+	game.queue_free()
+	await get_tree().process_frame
 
 
-func _fresh_game() -> Game:
+func _fresh_game(start := true) -> Game:
 	var game: Game = load("res://main.tscn").instantiate()
 	add_child(game)
 	await get_tree().process_frame
-	game.running = true
+	game.running = start
 	return game
 
 
@@ -143,8 +199,8 @@ func _expect(condition: bool, description: String) -> void:
 		printerr("  FALLA: ", description)
 
 
-## Parpadeo y "ojos cerrados" tienen que ser mecánicas separadas.
-## Se alimenta EyeInput a mano para no depender de una cámara.
+## Parpadeo, "ojos cerrados" y el gesto de agarre. Se alimenta EyeInput a mano
+## para no depender de una cámara.
 func _check_input() -> void:
 	var step := 1.0 / 60.0
 
@@ -177,6 +233,24 @@ func _check_input() -> void:
 	_expect(EyeInput.head.x > 0.0, "girar a la izquierda da ángulo positivo")
 	EyeInput._ingest(_face_frame(0.0, 0.0, -20.0), step * 30.0)
 	_expect(EyeInput.head.x < 0.0, "girar a la derecha da ángulo negativo")
+
+	# El gesto de agarre: palma sostenida y después puño, una sola vez.
+	EyeInput._ingest({"hand": true, "gesture": "Open_Palm"}, step)
+	EyeInput._update_grab(0.2)
+	_expect(EyeInput.palm_ready, "la palma sostenida queda lista")
+	var grabs := [0]
+	var counter := func() -> void: grabs[0] += 1
+	EyeInput.grab.connect(counter)
+	EyeInput._ingest({"hand": true, "gesture": "Closed_Fist"}, step)
+	EyeInput._update_grab(0.06)
+	_expect(grabs[0] == 1, "palma y puño disparan el agarre")
+	# Con el puño sostenido no vuelve a disparar.
+	EyeInput._update_grab(1.0)
+	_expect(grabs[0] == 1, "un puño sostenido no repite el agarre")
+	EyeInput.grab.disconnect(counter)
+
+	# Se deja la entrada limpia para el resto de las pruebas.
+	EyeInput._ingest({"face": false, "hand": false, "gesture": "None"}, 1.0)
 
 
 func _face_frame(left: float, right: float, yaw := 0.0) -> Dictionary:
