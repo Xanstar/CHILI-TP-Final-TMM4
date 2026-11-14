@@ -71,6 +71,8 @@ python -m venv .venv
 .venv\Scripts\pip install -r tracker/requirements.txt
 ```
 
+En Linux o macOS es lo mismo con `python3` y `.venv/bin/pip`.
+
 ## Jugar
 
 ```bash
@@ -83,19 +85,43 @@ En Windows hay dos atajos que hacen todo:
 - `run-game.bat` — abre el tracker y el juego.
 - `open-editor.bat` — abre solo el editor de Godot.
 
-### Si algo no abre
+### Abrir sin los atajos
 
-Doble click sobre `game/project.godot` **no** funciona: Windows no sabe con qué
-programa abrirlo salvo que hayas instalado Godot con instalador. Usá
-`open-editor.bat`, o esta línea con las rutas completas:
+Los `.bat` son comodidad, no un requisito. Con Godot 4.6 instalado hay tres
+formas de abrir el proyecto:
 
-```bat
-set GODOT=%LOCALAPPDATA%\Programs\Godot\Godot_v4.6.3-stable_win64.exe
-"%GODOT%" --editor --path game
+**1. Gestor de proyectos** (la que funciona siempre): abrí Godot, en el gestor
+elegí **Import**, buscá `game/project.godot`, dale **Import & Edit**. Queda en la
+lista: la próxima vez es doble click. Adentro, **F5** corre el juego.
+
+**2. Doble click en `game/project.godot`**: solo funciona si instalaste Godot con
+el instalador, que registra la asociación de archivos. Si Windows te pregunta con
+qué abrirlo, elegí Godot y marcá "usar siempre".
+
+**3. Línea de comandos**, sin pasar por el editor:
+
+```bash
+godot --path game            # corre el juego
+godot --editor --path game   # abre el editor
 ```
 
-`run-game.bat` avisa si falta Python, `mediapipe` o Godot en lugar de cerrarse
-sin decir nada.
+Si `godot` no está en el PATH, usá la ruta completa:
+
+```bat
+"%LOCALAPPDATA%\Programs\Godot\Godot_v4.6.3-stable_win64.exe" --path game
+```
+
+**Ojo con la entrada:** el juego no tiene teclado ni mouse, así que necesita el
+tracker corriendo para poder arrancar. Si abrís solo la escena, se queda en
+"Ponete frente a la cámara" y no empieza nunca. El orden es:
+
+```bash
+python tracker/tracker.py    # primero el tracker
+godot --path game            # después el juego
+```
+
+`run-game.bat` hace esas dos cosas y avisa si falta Python, `mediapipe` o Godot
+en lugar de cerrarse sin decir nada.
 
 ### Controles
 
