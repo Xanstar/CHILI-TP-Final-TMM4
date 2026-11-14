@@ -349,4 +349,3 @@ Lo que falta o está flojo, ordenado por prioridad:
   [Grab3D](https://grab3d.com), **CC0 1.0**. Cada carpeta trae su `LICENSE.txt` y
   su `manifest.json`.
 - **MediaPipe** y sus modelos (`tracker/models`): Google, Apache 2.0.
-- **El código del juego**: sin licencia por ahora.
