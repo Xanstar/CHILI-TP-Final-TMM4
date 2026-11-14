@@ -14,7 +14,7 @@ if exist "%~dp0.venv\Scripts\python.exe" set "PY=%~dp0.venv\Scripts\python.exe"
 if errorlevel 1 (
     echo Falta Python o la libreria mediapipe.
     echo.
-    echo Creá el entorno una sola vez, desde esta carpeta:
+    echo Crea el entorno una sola vez, desde esta carpeta:
     echo     python -m venv .venv
     echo     .venv\Scripts\pip install -r tracker\requirements.txt
     echo.

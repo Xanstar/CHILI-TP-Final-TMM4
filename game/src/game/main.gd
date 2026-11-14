@@ -88,7 +88,8 @@ const ENDINGS := {
 @export var cure_per_delivery := 0.25
 
 @export_group("Puerta")
-## Segundos que se puede mantener la puerta cerrada antes del apagón.
+## Energía por segundo que gasta la puerta cerrada: con la batería llena (1.0)
+## aguanta 1 / 0.08 = 12,5 s. Con la puerta abierta se recarga a 0.05 por segundo.
 @export var door_energy_drain := 0.08
 ## Segundos de oscuridad antes de que CHILI infecte.
 @export var blackout_duration := 3.0
