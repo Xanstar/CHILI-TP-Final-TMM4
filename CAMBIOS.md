@@ -8,7 +8,7 @@ No es un resumen: está pensado para que alguien que nunca vio ninguno de los do
 proyectos pueda entender qué había, qué se rompió, qué se arregló y por qué.
 Está separado en cambios **estructurales** (carpetas, módulos, entrada) y
 **narrativos** (escenario, reglas, finales), y al final hay una tabla commit por
-commit con las 38 modificaciones que siguen al primer commit.
+commit con las 41 modificaciones que siguen al primer commit.
 
 Si algo de lo que cambió no te gusta, al final está la sección
 [Versión de respaldo](#versión-de-respaldo-rama-legacy): una rama que conserva el
@@ -464,7 +464,7 @@ Para que no queden dudas de qué ya no existe:
 
 ## 10. Historial completo, commit por commit
 
-38 commits después del original. Los mensajes están en español y en imperativo:
+41 commits después del original. Los mensajes están en español y en imperativo:
 qué hace el commit, no qué "se estuvo trabajando".
 
 | # | Commit | Qué cambió |
@@ -508,6 +508,9 @@ qué hace el commit, no qué "se estuvo trabajando".
 | 36 | `311fc2b` | Remedios con modelos GLB reales CC0, `probe_deck` y `probe_surface` por perímetro. |
 | 37 | `a407f45` | Deja el repo listo para publicar: `.gitattributes`, `.gitignore` y licencias en el README. |
 | 38 | `d77dba0` | **Saca todo el teclado y el mouse**: el juego se juega solo con la cámara. |
+| 39 | `e528ef5` | Escribe este documento (`CAMBIOS.md`) y lo enlaza desde el README. |
+| 40 | `fea7a0d` | Saca un acento roto del mensaje de `_find-godot.bat` (cmd.exe lo mostraba como símbolo raro). |
+| 41 | `a411992` | Pasa a enlaces absolutos los enlaces a la rama legacy, que se rompían con la barra en el nombre. |
 
 Los commits 28 a 34 fueron de exploración con las teclas: sirvieron para elegir
 la posición del jugador, la de CHILI y la de los remedios. En el commit 38 se
