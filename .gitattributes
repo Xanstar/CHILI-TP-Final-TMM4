@@ -11,7 +11,9 @@
 *.tscn text
 *.tres text
 *.cfg text
-*.import text
+# Godot reescribe los .import con LF en todas las plataformas: si se convierten
+# a CRLF, cada `--import` deja el árbol sucio sin haber cambiado nada.
+*.import -text
 
 # Binarios: nada de convertir saltos de línea ni intentar mergearlos.
 *.glb binary
