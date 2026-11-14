@@ -33,9 +33,16 @@ game/                  Proyecto Godot 4.6 (abrí esta carpeta)
       cli.gd           Banderas de línea de comandos
     ui/
       hud.gd           Viñeta, negro, lista de remedios y finales
+  assets/
+    bathroom/          El baño (GLB de itch.io, ver README)
+    remedies/          Botiquín, frasco y paño (GLB CC0 de Grab3D)
   dev/
     smoke.tscn         Prueba de humo sin ventana
     probe_surface.tscn Comprueba que los remedios no floten
+    probe_deck.tscn    Mapa de la repisa: dónde se puede apoyar algo
+    remedy_shot.tscn   Primer plano de los remedios, para revisarlos
+    blackout_shot.tscn Cómo se ve el apagón, frame por frame
+    door_shot.tscn     Cómo abre la puerta
 tracker/
   tracker.py           Cámara -> UDP: cabeza, parpadeo y gestos
   pose.py              Geometría de la cabeza (landmarks -> grados)
@@ -201,3 +208,15 @@ Si la cámara no te detecta bien, corré `python tracker/probe.py`: abre la
 cámara, te guía por seis posiciones con una ventana y guarda un JSON con las
 lecturas y un PNG por fase. Sirve para saber si el problema es de detección
 (no hay cara) o de la cuenta (los ángulos no se mueven).
+
+## Créditos y licencias
+
+- **El baño** (`game/assets/bathroom`) es un GLB descargado de itch.io. Antes de
+  publicar el juego, revisá la licencia del pack original: el repo no la incluye.
+- **Los tres remedios** (`game/assets/remedies`) son modelos de
+  [Grab3D](https://grab3d.com), **CC0 1.0** (dominio público, sin atribución).
+  Cada carpeta trae su `LICENSE.txt` y su `manifest.json` con el origen.
+- **MediaPipe** y sus modelos (`tracker/models`) son de Google, con licencia
+  Apache 2.0.
+- El código del juego no tiene licencia todavía: si el repo va a ser público,
+  conviene agregar un `LICENSE`.

@@ -1,15 +1,18 @@
 extends Node3D
 ## Herramienta de diagnóstico: comprueba que los remedios estén apoyados sobre
-## la repisa del lavabo.
+## la repisa del lavabo y no colgando sobre el bowl.
 ##
 ##     godot --headless --path game res://dev/probe_surface.tscn
 ##
 ## Levanta la escena real (así los valores son los que ve el jugador) y, para
-## cada remedio, castea un rayo hacia abajo y compara con su base. No forma
-## parte del juego.
+## cada remedio, castea rayos hacia abajo en todo su perímetro. No forma parte
+## del juego.
 
 const SINK_NODE := "Sink_001_Bathtube_0"
 const TOLERANCE := 0.02
+## Cuánto puede sobresalir el piso por debajo de la base antes de considerar
+## que el objeto quedó colgando sobre un hueco.
+const OVERHANG := 0.03
 
 
 func _ready() -> void:
@@ -25,27 +28,41 @@ func _ready() -> void:
 
 	var failures := 0
 	for remedy: Pickup in game.remedies:
-		var at := remedy.global_position
-		var half := _half_height(remedy)
-		var bottom := at.y - half
-		var surface := _top_at(tris, at.x, at.z)
-		var gap := bottom - surface
-		var ok := absf(gap) <= TOLERANCE
-		if not ok:
+		var box: AABB = remedy.global_transform * remedy.model_aabb()
+		var base := box.position.y
+		var lowest := 9.0
+		var highest := -9.0
+		for sample in _perimeter(box):
+			var surface := _top_at(tris, sample.x, sample.z)
+			lowest = minf(lowest, surface)
+			highest = maxf(highest, surface)
+		var gap := base - highest
+		var state := "OK"
+		if absf(gap) > TOLERANCE:
+			state = "FLOJA" if gap > 0.0 else "HUNDIDA"
 			failures += 1
-		print("%-7s base y=%.3f  repisa y=%.3f  diferencia %+.3f  %s" % [
-			remedy.item_name, bottom, surface, gap, "OK" if ok else "FLOJA"])
+		elif lowest < base - OVERHANG:
+			state = "PUENTE"
+			failures += 1
+		print("%-9s base y=%.3f  repisa y=%.3f a %.3f  %s   alto %.2f m" % [
+			remedy.item_name, base, highest, lowest, state, box.size.y])
 	print("REMEDIOS: %s" % ("OK" if failures == 0 else "%d mal ubicados" % failures))
 	get_tree().quit()
 
 
-## La mitad de la altura de la malla visible: es lo que hay entre el centro del
-## remedio y el objeto que tiene debajo.
-func _half_height(remedy: Pickup) -> float:
-	for child in remedy.get_children():
-		if child is MeshInstance3D:
-			return (child as MeshInstance3D).get_aabb().size.y * 0.5 * remedy.scale.y
-	return 0.0
+## Centro y esquinas de la base: alcanza para saber si apoya en los cuatro
+## lados o si se está cayendo en el bowl.
+func _perimeter(box: AABB) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var center := box.get_center()
+	out.append(Vector3(center.x, 0.0, center.z))
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			out.append(Vector3(
+				center.x + sx * box.size.x * 0.45,
+				0.0,
+				center.z + sz * box.size.z * 0.45))
+	return out
 
 
 func _sink_triangles(game: Game) -> Array:

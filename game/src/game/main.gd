@@ -12,31 +12,35 @@ extends Node3D
 
 enum Focus { OTHER, ITEM, DOOR, CHILI, EYES_CLOSED, NO_SIGNAL }
 
-## Los tres remedios: nombre, forma, color y lugar. Se crean en el _ready.
+## Los tres remedios: nombre, modelo y lugar. Se crean en el _ready.
 ## Van apoyados sobre la repisa del lavabo, que es el único mueble bajo del
 ## baño: así quedan dentro del espacio jugable y a la vista desde el spawn.
-## La repisa está a y = DECK_Y; cada "at" sube lo que mide el objeto, así no
-## flotan ni se hunden.
-enum Remedy { CYLINDER, CAPSULE, BOX }
-
-## Altura de la repisa del lavabo, medida sobre el GLB con dev/probe_surface.gd.
+##
+## Los modelos son GLB con licencia CC0 (ver assets/remedies/*/LICENSE.txt) y
+## tienen el pivote en la base, así que apoyarlos es poner y = DECK_Y. "size"
+## los agranda: un frasco de tamaño real a metro y medio de distancia no se ve.
+## Los lugares salen de dev/probe_deck, que mapea la mesada: la izquierda y la
+## derecha del bowl están libres, y el frente también.
 const DECK_Y := 0.345
 
 const REMEDIES := [
 	{
-		"name": "Venda", "shape": Remedy.CYLINDER,
-		"color": Color(0.9, 0.9, 0.85),
-		"at": Vector3(0.75, DECK_Y + 0.13, 0.42), "yaw": 20.0,
+		"name": "Botiquín",
+		"model": "res://assets/remedies/first-aid-kit/first-aid-kit.glb",
+		"size": 0.55,
+		"at": Vector3(0.70, DECK_Y, 0.42), "yaw": 12.0,
 	},
 	{
-		"name": "Frasco", "shape": Remedy.CAPSULE,
-		"color": Color(0.9, 0.55, 0.1),
-		"at": Vector3(1.42, DECK_Y + 0.16, 0.46), "yaw": -15.0,
+		"name": "Frasco",
+		"model": "res://assets/remedies/pill-bottle/pill-bottle.glb",
+		"size": 1.8,
+		"at": Vector3(1.08, DECK_Y, 0.12), "yaw": -25.0,
 	},
 	{
-		"name": "Paño", "shape": Remedy.BOX,
-		"color": Color(0.3, 0.6, 0.7),
-		"at": Vector3(1.05, DECK_Y + 0.035, 0.145), "yaw": 0.0,
+		"name": "Paño",
+		"model": "res://assets/remedies/bath-towel/bath-towel.glb",
+		"size": 0.55,
+		"at": Vector3(1.46, DECK_Y, 0.42), "yaw": -8.0,
 	},
 ]
 
@@ -724,10 +728,10 @@ func _build_layout() -> void:
 		add_child(remedy)
 		remedy.setup(
 			data["name"],
-			_mesh_for(data["shape"]),
-			data["color"],
+			load(data["model"]),
 			data["at"],
-			data["yaw"])
+			data["yaw"],
+			data["size"])
 		remedies.append(remedy)
 
 
@@ -735,18 +739,6 @@ func _build_layout() -> void:
 ## viene amueblado en el GLB.
 func _clear_zones() -> Array[Vector3]:
 	return []
-
-
-## Las medidas importan: la mitad de la altura es lo que se suma a DECK_Y para
-## que el objeto quede apoyado y no flotando.
-func _mesh_for(shape: Remedy) -> Mesh:
-	match shape:
-		Remedy.CYLINDER:
-			return Shapes.cylinder(0.13, 0.26)
-		Remedy.CAPSULE:
-			return Shapes.capsule(0.09, 0.32)
-		_:
-			return Shapes.box(Vector3(0.36, 0.07, 0.18))
 
 
 # ============================================================
