@@ -8,10 +8,6 @@ entregárselos. Pero mirarlo fascina, y fascinarse contagia.
 Se juega **con los ojos y las manos**: una cámara lee hacia dónde mirás y qué
 hacen tus manos. No hay mouse ni teclado. Sin cámara no hay juego.
 
-> **¿Venís del repo original?** Todo lo que cambió respecto de
-> `SofiaDiaz-dm/TP-Final---TMM4` está en [CAMBIOS.md](CAMBIOS.md): cambios de
-> código, estructura, escenario y narrativa, commit por commit.
->
 > Si preferís una versión más parecida al trabajo original, existe la rama
 > [`legacy/original-camara`](https://github.com/Xanstar/CHILI-TP-Final-TMM4/tree/legacy/original-camara):
 > el juego de antes tal cual, pero con las mejoras de cámara de este repo.
@@ -243,5 +239,4 @@ lecturas y un PNG por fase. Sirve para saber si el problema es de detección
   Cada carpeta trae su `LICENSE.txt` y su `manifest.json` con el origen.
 - **MediaPipe** y sus modelos (`tracker/models`) son de Google, con licencia
   Apache 2.0.
-- El código del juego no tiene licencia todavía: si el repo va a ser público,
-  conviene agregar un `LICENSE`.
+
