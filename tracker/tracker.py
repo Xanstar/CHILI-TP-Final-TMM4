@@ -4,6 +4,11 @@ Lee la cara y las manos con MediaPipe y manda por UDP un JSON por cuadro con la
 pose de la cabeza, el parpadeo y los gestos de cada mano. El juego escucha en el
 puerto 4242 (ver game/src/input/eye_input.gd).
 
+Cada mano tiene un trabajo: la derecha agarra y entrega los remedios, la
+izquierda abre y cierra la puerta. El zoom con la mano izquierda esta apagado
+por ahora (bugueaba), asi que `hand_depth` se sigue mandando pero el juego lo
+ignora.
+
 La camara manda la POSE DE LA CABEZA, no la direccion de los ojos: los
 blendshapes de mirada son muy ruidosos y no distinguen "miro de reojo" de "giro
 la cabeza". Con landmarks, girar la cabeza mueve la nariz respecto de las
@@ -87,7 +92,7 @@ class Tracker:
         self._last_face: dict | None = None
         self._last_face_at = 0.0
         self._last_hands = {"hand": False, "gesture": "None",
-                            "zoom_hand": False, "zoom_gesture": "None",
+                            "left_hand": False, "left_gesture": "None",
                             "hand_depth": 0.0}
 
     def read(self, frame) -> dict:
@@ -106,8 +111,8 @@ class Tracker:
             "face": face is not None,
             "hand": hands["hand"],
             "gesture": hands["gesture"],
-            "zoom_hand": hands["zoom_hand"],
-            "zoom_gesture": hands["zoom_gesture"],
+            "left_hand": hands["left_hand"],
+            "left_gesture": hands["left_gesture"],
         }
         if face is not None:
             payload.update(face)
@@ -123,7 +128,7 @@ class Tracker:
                     f"parpadeo {payload['blink_l']:.2f}/{payload['blink_r']:.2f}")
         else:
             text = "sin cara"
-        hands = f"derecha: {payload['gesture']}    izquierda: {payload['zoom_gesture']}"
+        hands = f"derecha: {payload['gesture']}    izquierda: {payload['left_gesture']}"
         cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(frame, hands, (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
 
@@ -168,7 +173,7 @@ class Tracker:
         return face
 
     def _read_hands(self, frame, timestamp: int) -> dict:
-        state = {"hand": False, "gesture": "None", "zoom_hand": False, "zoom_gesture": "None", "hand_depth": 0.0}
+        state = {"hand": False, "gesture": "None", "left_hand": False, "left_gesture": "None", "hand_depth": 0.0}
         if self._frame_index % max(self.config.hand_every, 1) != 0:
             # Se reutiliza la ultima lectura de manos para ahorrar cuadros.
             return self._last_hands
@@ -198,7 +203,8 @@ class Tracker:
                 is_right = not is_right
 
             # Tamano de la mano en la imagen: proxy de distancia a la camara.
-            # Mano grande = cerca, mano pequena = lejos.
+            # Mano grande = cerca, mano pequena = lejos. Era para el zoom, que
+            # esta apagado: se sigue mandando por si vuelve.
             xs = [lm.x for lm in landmarks]
             ys = [lm.y for lm in landmarks]
             box_area = (max(xs) - min(xs)) * (max(ys) - min(ys))
@@ -207,8 +213,8 @@ class Tracker:
                 state["hand"] = True
                 state["gesture"] = gesture
             else:
-                state["zoom_hand"] = True
-                state["zoom_gesture"] = gesture
+                state["left_hand"] = True
+                state["left_gesture"] = gesture
                 state["hand_depth"] = box_area
 
         self._last_hands = state
@@ -254,8 +260,8 @@ class FakeSource:
             "blink_r": 0.0,
             "hand": False,
             "gesture": "None",
-            "zoom_hand": False,
-            "zoom_gesture": "None",
+            "left_hand": False,
+            "left_gesture": "None",
             "hand_depth": 0.0,
         }
 

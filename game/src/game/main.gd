@@ -83,7 +83,8 @@ const ENDINGS := {
 @export var gravity_rate := 0.004
 ## Por segundo, mirándolo.
 @export var contagion_rate := 0.012
-## Cuánto más contagia mirarlo con zoom (0 = nada).
+## Cuánto más contagia mirarlo con zoom (0 = nada). El zoom está apagado, así
+## que por ahora no se aplica.
 @export var contagion_zoom_bonus := 0.6
 @export var cure_per_delivery := 0.25
 
@@ -124,9 +125,6 @@ var focus := Focus.OTHER
 var gravity := 0.35
 var contagion := 0.0
 var fascination := 0.0
-var zoom := 0.0
-## Posición Z de la cámara: la mano izquierda la mueve adelante/atrás.
-var _camera_z := 0.0
 var chase := 0.0
 var delivered := 0
 var carried: Pickup = null
@@ -258,20 +256,23 @@ func _on_grab() -> void:
 #  REGLAS
 # ============================================================
 
+## La puerta la maneja la mano izquierda: puño para cerrarla, palma para abrirla,
+## mirándola. La derecha está ocupada con los remedios.
 func _update_door_toggle(delta: float) -> void:
 	_door_toggle_cooldown = maxf(_door_toggle_cooldown - delta, 0.0)
 	if _door_toggle_cooldown > 0.0:
 		return
 	var looking_at_door := _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0
-	if not looking_at_door or not EyeInput.hand:
+	if not looking_at_door or not EyeInput.left_hand:
 		return
-	if EyeInput.gesture == "Closed_Fist" and not door_closed:
+	if EyeInput.left_gesture == "Closed_Fist" and not door_closed:
 		_toggle_door()
-	elif EyeInput.gesture == "Open_Palm" and door_closed:
+	elif EyeInput.left_gesture == "Open_Palm" and door_closed:
 		_toggle_door()
 
 
-## Abre o cierra la puerta. La dispara el gesto de la mano mirando la puerta.
+## Abre o cierra la puerta. La dispara el gesto de la mano izquierda mirando
+## la puerta.
 func _toggle_door() -> void:
 	door_closed = not door_closed
 	room.set_door_closed(door_closed)
@@ -307,7 +308,7 @@ func _toggle_lights_recursive(node: Node, on: bool) -> void:
 
 
 func _update_camera(delta: float) -> void:
-	var obstructed := EyeInput.hand_obstructs() or EyeInput.zoom_hand
+	var obstructed := EyeInput.hand_obstructs() or EyeInput.left_hand
 	var can_look := EyeInput.tracking and not obstructed
 	var can_turn := can_look and not (EyeInput.hand and carried == null)
 	camera.follow(EyeInput.head - _head_offset, can_look, can_turn, delta)
@@ -473,9 +474,9 @@ func _finish_later(kind: StringName, delay: float) -> void:
 func _update_views(delta: float) -> void:
 	chili.gravity = gravity
 	chili.apply(delta, _bait, _flash)
-	camera.set_zoom(EyeInput.zoom_hand and EyeInput.zoom_gesture == "Open_Palm",
-		fascination, delta)
-	zoom = camera.zoom_level
+	# El zoom está apagado por ahora: se sigue llamando para que la fascinación
+	# cierre el campo visual, pero la mano nunca lo activa (held = false).
+	camera.set_zoom(false, fascination, delta)
 
 	for remedy in remedies:
 		remedy.set_highlight(_highlight_for(remedy))
@@ -561,7 +562,7 @@ func _target_text() -> String:
 	if targeted_remedy != null:
 		return "%s — palma abierta y puño" % targeted_remedy.item_name
 	if room.glb_door != null and _angle_to(room.glb_door, Vector3(0, 1.0, 0)) < 30.0:
-		return "puerta cerrada — palma abierta" if door_closed else "puerta abierta — puño"
+		return "puerta cerrada — palma izquierda" if door_closed else "puerta abierta — puño izquierdo"
 	return ""
 
 
@@ -578,17 +579,17 @@ func _debug_text() -> String:
 	var head := EyeInput.head - _head_offset
 	var hand_text := EyeInput.gesture if EyeInput.hand else "ninguna"
 	var palm_text := " (lista)" if EyeInput.palm_ready else ""
-	var zoom_text := EyeInput.zoom_gesture if EyeInput.zoom_hand else "ninguna"
+	var left_text := EyeInput.left_gesture if EyeInput.left_hand else "ninguna"
 	var carried_text := carried.item_name if carried != null else "-"
 	return """cabeza: %+.1f° %+.1f°   párpados: %.2f/%.2f   ojos cerrados: %.1fs
 foco: %s   rumbo: %d°   cámara: %s
-mano der: %s%s   mano izq: %s   zoom: %.2f
+mano der (agarra): %s%s   mano izq (puerta): %s
 fascinación: %.2f   contagio: %.2f
 gravedad CHILI: %.2f   entregados: %d/%d   en la mano: %s""" % [
 		head.x, head.y, EyeInput.blink_l, EyeInput.blink_r, EyeInput.eyes_closed_time,
 		Focus.keys()[focus], camera.heading_degrees(),
 		"leyendo" if EyeInput.tracking else "sin lectura",
-		hand_text, palm_text, zoom_text, zoom,
+		hand_text, palm_text, left_text,
 		fascination, contagion,
 		gravity, delivered, remedies.size(), carried_text,
 	]

@@ -60,13 +60,22 @@ func _ready() -> void:
 	game.targeted_remedy = null
 	_expect("puerta" in game.call("_target_text"), "el HUD avisa de la puerta")
 
-	# La puerta se abre y se cierra con la mano, mirándola.
+	# La puerta se abre y se cierra con la mano izquierda, mirándola.
 	game.carried = null
 	game.looked_remedy = null
 	game.targeted_remedy = null
 	var was_closed: bool = game.door_closed
 	_door_gesture(game, was_closed)
 	_expect(game.door_closed != was_closed, "el gesto abre o cierra la puerta")
+
+	# La mano derecha es para los remedios: mirando la puerta no la toca.
+	var closed_now: bool = game.door_closed
+	var gesture := "Open_Palm" if closed_now else "Closed_Fist"
+	EyeInput._ingest({"hand": true, "gesture": gesture}, 1.0 / 60.0)
+	game._door_toggle_cooldown = 0.0
+	game.call("_update_door_toggle", 0.016)
+	EyeInput._ingest({"hand": false, "gesture": "None"}, 1.0 / 60.0)
+	_expect(game.door_closed == closed_now, "la mano derecha no abre ni cierra la puerta")
 
 	# Un solo juego escuchando la entrada: si quedan dos, los gestos se
 	# duplican y las pruebas siguientes mienten.
@@ -109,17 +118,17 @@ func _deliver_gesture(game: Game) -> void:
 	EyeInput._update_grab(0.016)
 
 
-## Mira la puerta y hace el gesto que falta: puño si está abierta, palma si
-## está cerrada.
+## Mira la puerta y hace el gesto que falta con la mano izquierda: puño si está
+## abierta, palma si está cerrada.
 func _door_gesture(game: Game, door_is_closed: bool) -> void:
 	var door := game.room.glb_door
 	var aim := door.global_position + Vector3(0.0, 1.0, 0.0)
 	game.camera.look_at(aim, Vector3.UP)
 	var gesture := "Open_Palm" if door_is_closed else "Closed_Fist"
-	EyeInput._ingest({"hand": true, "gesture": gesture}, 1.0 / 60.0)
+	EyeInput._ingest({"left_hand": true, "left_gesture": gesture}, 1.0 / 60.0)
 	game._door_toggle_cooldown = 0.0
 	game.call("_update_door_toggle", 0.016)
-	EyeInput._ingest({"hand": false, "gesture": "None"}, 1.0 / 60.0)
+	EyeInput._ingest({"left_hand": false, "left_gesture": "None"}, 1.0 / 60.0)
 
 
 # ============================================================

@@ -4,7 +4,10 @@ extends Node
 ## Lee los paquetes UDP que manda tracker.py y los expone como cabeza y manos.
 ## No hay teclado ni mouse: si no hay cámara, no hay entrada. El resto del juego
 ## nunca sabe de dónde viene el dato, solo lee [member head], [member hand],
-## [member zoom_hand] y escucha [signal grab].
+## [member left_hand] y escucha [signal grab].
+##
+## Cada mano tiene un trabajo y no se mezclan: la derecha agarra los remedios,
+## la izquierda abre y cierra la puerta.
 ##
 ## El parpadeo y el estado "ojos cerrados" son cosas distintas a propósito:
 ## [member blink] es el párpado (visual, dura un instante) y
@@ -48,14 +51,15 @@ var _blink_baseline_l := 0.0
 var _blink_baseline_r := 0.0
 var _blink_calibrated := false
 
-## Mano derecha a la vista.
+## Mano derecha a la vista: agarra y entrega los remedios.
 var hand := false
 var gesture := "None"
-## Mano izquierda a la vista (zoom).
-var zoom_hand := false
-var zoom_gesture := "None"
+## Mano izquierda a la vista: abre y cierra la puerta.
+var left_hand := false
+var left_gesture := "None"
 ## Tamaño de la mano izquierda en la imagen: proxy de distancia a la cámara.
-## 0 = lejos/pequeña, 1 = cerca/grande.
+## 0 = lejos/pequeña, 1 = cerca/grande. Hoy el juego no lo usa (era para el
+## zoom); se sigue leyendo para no cambiar el protocolo.
 var hand_depth := 0.0
 ## La palma derecha lleva abierta el tiempo suficiente como para elegir.
 var palm_ready := false
@@ -110,8 +114,8 @@ func _ingest(frame: Dictionary, delta: float) -> void:
 	_raw_tracking = frame.get("face", false)
 	hand = frame.get("hand", false)
 	gesture = frame.get("gesture", "None")
-	zoom_hand = frame.get("zoom_hand", false)
-	zoom_gesture = frame.get("zoom_gesture", "None")
+	left_hand = frame.get("left_hand", false)
+	left_gesture = frame.get("left_gesture", "None")
 	hand_depth = clampf(frame.get("hand_depth", 0.0), 0.0, 1.0)
 
 	if _raw_tracking:
@@ -176,8 +180,8 @@ func _watch_for_stall(delta: float) -> void:
 			tracking = false
 		hand = false
 		gesture = "None"
-		zoom_hand = false
-		zoom_gesture = "None"
+		left_hand = false
+		left_gesture = "None"
 		hand_depth = 0.0
 		_release_eyes(delta)
 
